@@ -1,0 +1,12 @@
+language: node_js
+
+node_js:
+  - "lts/*"
+
+jobs:
+  include:
+    - stage: Test
+      env:
+        - NODE_ENV=testing
+      name: Unit Tests
+      script: npm run test:ci
