@@ -1,12 +1,17 @@
 language: node_js
-
 node_js:
-  - "lts/*"
-
+- lts/*
+-
 jobs:
   include:
-    - stage: Test
-      env:
-        - NODE_ENV=testing
-      name: Unit Tests
-      script: npm run test:ci
+  - stage: Test
+    env:
+    - NODE_ENV=testing
+    name: Unit Tests
+    script: npm run test:ci
+
+deploy:
+  provider: heroku
+  app: pokern
+  api_key:
+    secure: UAMRu1J/JaMHo9pP8+n/1+OOjSbxcdHi/FAL5dzfTdCXK+u+mXSOhznIwJQzteJR1nIuSnnSJ1nnck5R/37x1ugpYtsCW4alwpMMPIhLZQRVgHUU8MyUM1FaSgiVWFfCNTpOlI5gPzGFLhABpJqMD6clz8EfWix+bfF8GnnKE4YDiqPVfReHexOQn26K7hhgA0fKHrZ78MDyPRAbR9CajTDxSZVY6J53wb40PGEAw++IIut32SUhqcPAfrDyaT74wO1XsXSoPnQ38SxxFc2V9QGWhrLq8xcHDIFGSCpidtnQfI6IoaMmyp1QHRXXD1s/R1U+kqlWUMAbQ5BEcD1+D/lzPzdwIKSsI7Qf0IZy/+RVRE38MtPERDmNtSqmnGRhyOHypxMsEGUX9YL9RkwrK0nUMpXNRfCh1iOMps5IiQgnbml69oL/5BOvAMX91lZRBRdPMf8PznV6qkedfHmIwqKPArg6368SZF5D3PA9G6xGXWuPaOfs5cL+sKtmBhg8Fr/8uzQaC4S6HXbSIIS7AZrE+2aGuuL9OIzBRfb7eEdqlIAFeRnRnnwfs3aT1vi8iGTeTl7CHYDxCxzn7oth71LQl7SR2H4Qxqb52IDp+oyqzwRzXWa4Bih46xdebtRNbuXOhJ68Z8EJCkYyC2SFH2bUGj2qe5dJUb/gAc5hwhA=
