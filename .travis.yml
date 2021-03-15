@@ -1,7 +1,7 @@
 language: node_js
 node_js:
 - lts/*
-- 
+
 jobs:
   include:
   - stage: Test
@@ -9,8 +9,10 @@ jobs:
     - NODE_ENV=testing
     name: Unit Tests
     script: npm run test:ci
-deploy:
-  provider: heroku
-  app: pokern
-  api_key:
-    secure: NFZ7Zk875sCfhMN1WdJTKQVKapM18rx+366celSwWSrO9EvLaU4ZrwTuhxo1vVh6UAoJN1Xa5lVysCidzSXstFqBp4Ukb1uoTDa1J0/Eiq8R1f08MjHfD3WQSscfvDv9P9Al+liF6U7WoVY/ZGMLFTtrp9lpPW54hr+urw4Pgwq+br89u8jwaD3QYvbXG+K4CmDWxsrUk14inzh5x+nehSNPG6b8zndTiouqItOk7G4gIkcnW2yDWZf5p4WQiYRQZImhY7V4wyRj8YThhYrfWCwo6CZDPZhk+lTh21x47DdRZluT9j+rVSW/jt5dRRDCEFmn9yhxCsXExgCvV5r0sZSZa+Ra98K/6+a0epTUixho6TzXWObwgp8Mi7wtnzBV5YtgYAzZ0B0EWDcRSs8G63uEsszttg03lDg5jv7OVoyaXawwd1h1FiFgQUAed3dlUxWxUS7PZgBRxc2TUy0o2CJXCovz96XJqVS7SMZyR33FkgUs5JwJjMGutA1SYhcWsWY31Ms7BKWKgDC2xyx4WfANY6/u0po+sbZtaM1dGFxfEUCDjlHTbw4O7DHUBrEYsAUUucNYX6QPDm2oCStGxkVG9DzYP6DvSKPdmpT9+y671ehApxO9dPbYBptL0A6dQWy+fKni1oSv1WRXMWFA9ltCcGpHe0ydSM+oQL6QJjo=
+
+  - stage: Deploy
+    deploy:
+      provider: heroku
+      app: pokern
+      api_key:
+        secure: NFZ7Zk875sCfhMN1WdJTKQVKapM18rx+366celSwWSrO9EvLaU4ZrwTuhxo1vVh6UAoJN1Xa5lVysCidzSXstFqBp4Ukb1uoTDa1J0/Eiq8R1f08MjHfD3WQSscfvDv9P9Al+liF6U7WoVY/ZGMLFTtrp9lpPW54hr+urw4Pgwq+br89u8jwaD3QYvbXG+K4CmDWxsrUk14inzh5x+nehSNPG6b8zndTiouqItOk7G4gIkcnW2yDWZf5p4WQiYRQZImhY7V4wyRj8YThhYrfWCwo6CZDPZhk+lTh21x47DdRZluT9j+rVSW/jt5dRRDCEFmn9yhxCsXExgCvV5r0sZSZa+Ra98K/6+a0epTUixho6TzXWObwgp8Mi7wtnzBV5YtgYAzZ0B0EWDcRSs8G63uEsszttg03lDg5jv7OVoyaXawwd1h1FiFgQUAed3dlUxWxUS7PZgBRxc2TUy0o2CJXCovz96XJqVS7SMZyR33FkgUs5JwJjMGutA1SYhcWsWY31Ms7BKWKgDC2xyx4WfANY6/u0po+sbZtaM1dGFxfEUCDjlHTbw4O7DHUBrEYsAUUucNYX6QPDm2oCStGxkVG9DzYP6DvSKPdmpT9+y671ehApxO9dPbYBptL0A6dQWy+fKni1oSv1WRXMWFA9ltCcGpHe0ydSM+oQL6QJjo=
