@@ -736,7 +736,7 @@ describe('Table', () => {
                 // rig the test player cards and the board
                 table.getPlayer(player1).cards = ['AD', 'AS'];
                 table.getPlayer(player3).cards = ['2D', '9C'];
-                table.getGame().deck = table.getGame().deck.filter(card => card !== 'AD' || 'AS' || '2D' || '9C');
+                table.getGame().deck = table.getGame().deck.filter(card => card !== 'AD' && card !== 'AS' && card !== '2D' && card !=='9C');
 
 
                 table.bet(player3, table.getPlayer(player3).chips); // all in
