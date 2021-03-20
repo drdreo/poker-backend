@@ -19,7 +19,9 @@ jobs:
 
   - stage: Create Sentry Release
     if: (type = push AND branch = master)
-      env: SENTRY_ORG=drdreo SENTRY_PROJECT=pokern-backend
+    env:
+    - SENTRY_ORG=drdreo
+    - SENTRY_PROJECT=pokern-backend
     script: |
       curl -sL https://sentry.io/get-cli/ | bash
       export SENTRY_RELEASE=$(sentry-cli releases propose-version)
