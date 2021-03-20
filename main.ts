@@ -1,8 +1,6 @@
 import { Logger, LogLevel } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-
-
 import { AppModule } from './src/app.module';
 import { Config, Environment } from './src/config/configuration';
 
