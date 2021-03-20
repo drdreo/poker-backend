@@ -1,6 +1,6 @@
 import { Player } from '../Player';
 
-const Hand = require('pokersolver').Hand;
+export const Hand = require('pokersolver').Hand;
 
 // export function rankHand(player: Player) {
 //     player.hand = PokerEvaluator.evalHand([...player.cards, ...this.game.board]);
@@ -8,6 +8,7 @@ const Hand = require('pokersolver').Hand;
 
 export function rankHandNew(player: Player, board: string[]) {
     player.hand = Hand.solve([...player.cards, ...board]);
+    player.hand.playerID = player.id;
 }
 
 export function rankPlayersHands(players: Player[], board: string[]) {
@@ -19,7 +20,14 @@ export function rankPlayersHands(players: Player[], board: string[]) {
     }
 }
 
-export function getHandWinners(players: Player[]) {
+export function getHandWinners(players: Player[]): Player[] {
+
+    // const winner = players.reduce((prev, cur) => {
+    //     return (prev.hand?.rank > cur.hand?.rank) ? prev : cur;
+    // });
+
+    // then return all players with that hand
     const hands = players.map(player => player.hand);
-    return Hand.winners(hands);
+    const winnningHands = Hand.winners(hands);
+    return players.filter(player => winnningHands.some(hand => hand.playerID === player.id));
 }

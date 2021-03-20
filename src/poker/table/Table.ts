@@ -6,7 +6,7 @@ import { GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePo
 import { TableConfig } from '../../config/table.config';
 import { Bet } from '../game/Bet';
 import { Game } from '../game/Game';
-import { rankPlayersHands } from '../game/Hand';
+import { rankPlayersHands, getHandWinners } from '../game/Hand';
 import { Player } from '../Player';
 import { remapCards, getNextIndex } from '../utils';
 import { TableCommand, TableCommandName } from './TableCommand';
@@ -675,12 +675,7 @@ export class Table {
 
         rankPlayersHands(availablePlayers, this.game.board);
 
-        const winner = availablePlayers.reduce((prev, cur) => {
-            return (prev.hand.rank > cur.hand.rank) ? prev : cur;
-        });
-
-        // then return all players with that hand
-        return availablePlayers.filter(player => player.hand?.rank === winner.hand.rank);
+      return getHandWinners(availablePlayers);
     }
 
     private getPlayerColor(): string {
