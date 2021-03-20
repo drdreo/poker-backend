@@ -1,6 +1,5 @@
 import { WsException } from '@nestjs/websockets';
-import { SidePotPlayer, PlayerOverview, Bet } from '../../shared/src';
-import { SolvedHand } from './game/Hand';
+import { SidePotPlayer, PlayerOverview, Bet, SolvedHand } from '../../shared/src';
 import { remapCards, hideCards } from './utils';
 
 export class Player {

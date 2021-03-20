@@ -9,9 +9,9 @@ import {
 } from '../../shared/src';
 import { SentryInterceptor } from '../sentry.interceptor';
 import { Player } from './Player';
-import { remapCards } from './table/Table';
 import { TableService } from './table/table.service';
 import { TableCommand, TableCommandName } from './table/TableCommand';
+import { remapCards } from './utils';
 
 interface Connection {
     id: string;
@@ -97,7 +97,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             this.logger.debug(`Player[${ playerName }] needs to reconnect!`);
             newPlayerID = playerID;
             const table = this.tableService.playerReconnected(playerID);
-            this.logger.debug(`Players last table[${table.name}] found!`);
+            this.logger.debug(`Players last table[${ table.name }] found!`);
 
             const gameStatus = table.getGameStatus();
             // tell the player again all information if game started: players, game status, board, pot
@@ -220,7 +220,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 break;
 
             case TableCommandName.MaxBetUpdate: {
-                const response: MaxBetUpdate = { maxBet: data.maxBet};
+                const response: MaxBetUpdate = { maxBet: data.maxBet };
                 this.sendTo(table, PokerEvent.MaxBetUpdate, response);
             }
                 break;
