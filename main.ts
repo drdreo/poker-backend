@@ -6,7 +6,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './src/app.module';
 import { Config, Environment } from './src/config/configuration';
 
-const logLevels: LogLevel[] = process.env.NODE_ENV === 'prod' ? ['error', 'warn', 'log'] : ['log', 'error', 'warn', 'debug', 'verbose'];
+const logLevels: LogLevel[] = process.env.NODE_ENV === 'prod' ? ['error', 'warn', 'log'] : process.env.NODE_ENV === 'test' ? ['error', 'warn'] : ['log', 'error', 'warn', 'debug', 'verbose'];
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule, {
