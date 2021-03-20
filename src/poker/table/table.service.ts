@@ -59,7 +59,7 @@ export class TableService {
     }
 
     playerLeft(playerID: string) {
-        for (let table of this.tables) {
+        for (const table of this.tables) {
             const player = table.getPlayer(playerID);
             if (player) {
                 player.disconnected = true;
@@ -81,7 +81,7 @@ export class TableService {
     }
 
     playerReconnected(playerID: string): Table {
-        for (let table of this.tables) {
+        for (const table of this.tables) {
             const player = table.players.find(player => player.id === playerID);
             if (player) {
                 player.disconnected = false;

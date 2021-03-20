@@ -1,15 +1,18 @@
 import { Logger } from '@nestjs/common';
-import { RoundType, BetType } from '../../shared/src';
-import { Player } from './Player';
+import { RoundType, BetType } from '../../../shared/src';
+import { Player } from '../Player';
+import { Bet } from './Bet';
+import { Round } from './Round';
+import { SidePot } from './SidePot';
 
 
 export class Game {
-    public pot: number = 0;
+    public pot = 0;
     public sidePots: SidePot[] = [];
     public round: Round;
     public deck: string[] = [];
     public board: string[] = [];
-    public ended: boolean = false;
+    public ended = false;
 
     private logger;
 
@@ -50,10 +53,10 @@ export class Game {
     }
 
     // Returns the index of the player with the last bet or undefined
-    getLastBet(): { index: number, bet: number } | null {
+    getLastBet(): { index: number; bet: number } | null {
 
         for (let index = 0; index < this.round.bets.length; index++) {
-            let bet = this.round.bets[index];
+            const bet = this.round.bets[index];
             if (bet.amount > 0) {
                 return { index, bet: bet.amount };
             }
@@ -64,7 +67,7 @@ export class Game {
 
     getLowestBet(): number {
         let lowest = Number.POSITIVE_INFINITY;
-        for (let bet of this.round.bets) {
+        for (const bet of this.round.bets) {
             if (bet?.amount > 0) {
                 lowest = Math.min(lowest, bet.amount);
             }
@@ -120,8 +123,8 @@ export class Game {
 
         // shuffle the deck array with Fisher-Yates
         for (let i = 0; i < this.deck.length; i++) {
-            let j = Math.floor(Math.random() * (i + 1));
-            let tmp = this.deck[i];
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = this.deck[i];
             this.deck[i] = this.deck[j];
             this.deck[j] = tmp;
         }
@@ -138,20 +141,3 @@ export class Game {
         this.sidePots = [];
     }
 }
-
-// RoundTypes: Deal,Flop,Turn,River,Showdown
-// BetTypes: Bet,Raise,ReRaise, cap
-export class Round {
-    bets: Bet[] = [];
-
-    constructor(public type: RoundType) { }
-}
-
-export class Bet {
-    constructor(public amount: number, public type: BetType) {}
-}
-
-export class SidePot {
-    constructor(public amount: number, public players: Player[]) { }
-}
-

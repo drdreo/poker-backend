@@ -11,13 +11,18 @@
     "baseUrl": "./src",
     "incremental": true,
     "paths": {
-      "@shared/*": ["../shared/*"],
+      "@shared/*": [
+        "../shared/*"
+      ]
     }
   },
+  "include": [
+    "**/src/**/*.ts",
+    "**/test/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
-    "dist",
-    "../client/**/*"
+    "dist"
   ],
   "files": [
     "main.ts"

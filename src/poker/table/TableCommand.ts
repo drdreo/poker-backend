@@ -1,5 +1,5 @@
 import { BetType, Card, Winner, GameStatus, SidePot } from '../../../shared/src';
-import { Round } from '../Game';
+import { Round } from '../game/Round';
 
 export enum TableCommandName{
     HomeInfo = 'home_info',
@@ -23,18 +23,18 @@ export interface TableCommand {
     name: TableCommandName;
     table: string;
     data?: {
-        players?,
-        playerID?: string,
-        currentPlayerID?: string,
-        dealerPlayerID?: string,
-        pot?: number,
-        sidePots?: SidePot[],
-        bet?: number,
-        maxBet?: number,
-        type?: BetType,
-        board?: Card[],
-        round?: Round,
-        winners?: Winner[],
-        gameStatus?: GameStatus
+        players?;
+        playerID?: string;
+        currentPlayerID?: string;
+        dealerPlayerID?: string;
+        pot?: number;
+        sidePots?: SidePot[];
+        bet?: number;
+        maxBet?: number;
+        type?: BetType;
+        board?: Card[];
+        round?: Round;
+        winners?: Winner[];
+        gameStatus?: GameStatus;
     };
 }

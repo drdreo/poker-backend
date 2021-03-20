@@ -2,8 +2,8 @@ import { Game } from './Game';
 
 describe('Game', () => {
     let game: Game;
-    let smallBlind = 10;
-    let bigBlind = 20;
+    const smallBlind = 10;
+    const bigBlind = 20;
 
     beforeEach(() => {
         game = new Game(smallBlind, bigBlind, 'TestGame');

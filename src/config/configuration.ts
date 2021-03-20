@@ -7,11 +7,11 @@ export enum Environment {
 }
 
 export interface Config {
-    ENV: Environment,
-    PORT: number,
-    WHITELIST: string[],
-    SENTRY: SentryConfig,
-    TABLE: TableConfig
+    ENV: Environment;
+    PORT: number;
+    WHITELIST: string[];
+    SENTRY: SentryConfig;
+    TABLE: TableConfig;
 }
 
 export interface SentryConfig {

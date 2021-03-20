@@ -15,36 +15,34 @@ export class SentryInterceptor implements NestInterceptor {
         // first param would be for events, second is for errors
         return next.handle().pipe(
             tap(null, (exception) => {
-                if (this.shouldReport(exception)) {
-                    this.client.instance().withScope((scope) => {
-                        switch (context.getType<ContextType>()) {
-                            case 'http':
-                                return this.captureHttpException(
-                                    scope,
-                                    context.switchToHttp(),
-                                    exception
-                                );
-                            case 'rpc':
-                                return this.captureRpcException(
-                                    scope,
-                                    context.switchToRpc(),
-                                    exception
-                                );
-                            case 'ws':
-                                return this.captureWsException(
-                                    scope,
-                                    context.switchToWs(),
-                                    exception
-                                );
-                        }
-                    });
-                }
+                this.client.instance().withScope((scope) => {
+                    switch (context.getType<ContextType>()) {
+                        case 'http':
+                            return this.captureHttpException(
+                                scope,
+                                context.switchToHttp(),
+                                exception
+                            );
+                        case 'rpc':
+                            return this.captureRpcException(
+                                scope,
+                                context.switchToRpc(),
+                                exception
+                            );
+                        case 'ws':
+                            return this.captureWsException(
+                                scope,
+                                context.switchToWs(),
+                                exception
+                            );
+                    }
+                });
             })
         );
     }
 
     private captureHttpException(scope: Scope, http: HttpArgumentsHost, exception: any): void {
-        const data = Handlers.parseRequest(<any>{}, http.getRequest(), {});
+        const data = Handlers.parseRequest({} as any, http.getRequest(), {});
 
         scope.setExtra('req', data.request);
 
@@ -69,14 +67,10 @@ export class SentryInterceptor implements NestInterceptor {
         ws: WsArgumentsHost,
         exception: any
     ): void {
-        const {id, playerID, table } = ws.getClient();
-        scope.setExtra('ws_client', {id, playerID, table });
+        const { id, playerID, table } = ws.getClient();
+        scope.setExtra('ws_client', { id, playerID, table });
         scope.setExtra('ws_data', ws.getData());
 
         this.client.instance().captureException(exception);
-    }
-
-    private shouldReport(exception: any) {
-        return true;
     }
 }

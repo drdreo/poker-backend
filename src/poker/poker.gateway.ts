@@ -85,9 +85,9 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName }): WsResponse<ServerJoined> {
         this.logger.debug(`Player[${ playerName }] joining!`);
 
-        const sanitized_room = roomName.toLowerCase();
-        socket.join(sanitized_room);
-        socket['table'] = sanitized_room;
+        const sanitizedRoom = roomName.toLowerCase();
+        socket.join(sanitizedRoom);
+        socket['table'] = sanitizedRoom;
         socket['playerID'] = playerID; // either overwrite existing one, reset it if its undefined
 
         let newPlayerID;
@@ -112,7 +112,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             this.sendTo(socket.id, PokerEvent.GameStatus, gameStatus);
 
         } else if (playerName) {   // new Player wants to create or join
-            const response = this.tableService.createOrJoinTable(sanitized_room, playerName);
+            const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName);
             newPlayerID = response.playerID;
 
             this.sendHomeInfo();
@@ -122,12 +122,12 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // connect the socket with its playerID
         socket['playerID'] = newPlayerID;
-        socket['table'] = sanitized_room;
+        socket['table'] = sanitizedRoom;
         this.connections.find(conn => conn.id === socket.id).playerID = newPlayerID;
 
 
-        this.tableService.getTable(sanitized_room).sendPlayersUpdate();
-        return { event: PokerEvent.Joined, data: { playerID: newPlayerID, table: sanitized_room } };
+        this.tableService.getTable(sanitizedRoom).sendPlayersUpdate();
+        return { event: PokerEvent.Joined, data: { playerID: newPlayerID, table: sanitizedRoom } };
     }
 
     @SubscribeMessage(PlayerEvent.StartGame)
@@ -201,26 +201,26 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 break;
 
             case TableCommandName.PlayerBet: {
-                let response: PlayerBet = { playerID: data.playerID, bet: data.bet, maxBet: data.maxBet, type: data.type };
+                const response: PlayerBet = { playerID: data.playerID, bet: data.bet, maxBet: data.maxBet, type: data.type };
                 this.sendTo(table, PokerEvent.PlayerBet, response);
             }
                 break;
 
 
             case TableCommandName.PlayersCards: {
-                let response: GamePlayersUpdate = { players: data.players };
+                const response: GamePlayersUpdate = { players: data.players };
                 this.sendTo(table, PokerEvent.PlayersCards, response);
             }
                 break;
 
             case TableCommandName.PotUpdate: {
-                let response: GamePotUpdate = { pot: data.pot, sidePots: data.sidePots };
+                const response: GamePotUpdate = { pot: data.pot, sidePots: data.sidePots };
                 this.sendTo(table, PokerEvent.PotUpdate, response);
             }
                 break;
 
             case TableCommandName.MaxBetUpdate: {
-                let response: MaxBetUpdate = { maxBet: data.maxBet};
+                const response: MaxBetUpdate = { maxBet: data.maxBet};
                 this.sendTo(table, PokerEvent.MaxBetUpdate, response);
             }
                 break;
@@ -234,31 +234,31 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 break;
 
             case TableCommandName.GameWinners: {
-                let response: GameWinners = { winners: data.winners };
+                const response: GameWinners = { winners: data.winners };
                 this.sendTo(table, PokerEvent.GameWinners, response);
             }
                 break;
 
             case TableCommandName.CurrentPlayer: {
-                let response: GameCurrentPlayer = { currentPlayerID: data.currentPlayerID };
+                const response: GameCurrentPlayer = { currentPlayerID: data.currentPlayerID };
                 this.sendTo(table, PokerEvent.CurrentPlayer, response);
             }
                 break;
 
             case TableCommandName.Dealer: {
-                let response: GameDealerUpdate = { dealerPlayerID: data.dealerPlayerID };
+                const response: GameDealerUpdate = { dealerPlayerID: data.dealerPlayerID };
                 this.sendTo(table, PokerEvent.DealerUpdate, response);
             }
                 break;
 
             case TableCommandName.BoardUpdated: {
-                let response: GameBoardUpdate = { board: data.board };
+                const response: GameBoardUpdate = { board: data.board };
                 this.sendTo(table, PokerEvent.BoardUpdate, response);
             }
                 break;
 
             case TableCommandName.NewRound: {
-                let response: GameRoundUpdate = { round: data.round };
+                const response: GameRoundUpdate = { round: data.round };
                 this.sendTo(table, PokerEvent.NewRound, response);
             }
                 break;
@@ -275,7 +275,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     private sendPlayerUpdateIndividually(table: string, players: Player[]) {
         // tell every player the cards specifically
-        for (let player of players) {
+        for (const player of players) {
 
             const conn = this.connections.find(conn => conn.playerID === player.id);
 
@@ -296,7 +296,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const playersData = table.getPlayersPreview();
         const room = this.server.sockets.adapter.rooms[tableName];
 
-        for (let socketID in room.sockets) {
+        for (const socketID in room.sockets) {
             const playerId = this.getConnectionById(socketID).playerID;
             const isPlayer = table.isPlayer(playerId);
             if (!isPlayer) {

@@ -1,12 +1,14 @@
 import { Logger } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
-import * as PokerEvaluator from 'poker-evaluator';
 import { Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
-import { GameStatus, Card, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer } from '../../../shared/src';
+import { GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer } from '../../../shared/src';
 import { TableConfig } from '../../config/table.config';
-import { Game, Bet } from '../Game';
+import { Bet } from '../game/Bet';
+import { Game } from '../game/Game';
+import { rankPlayersHands } from '../game/Hand';
 import { Player } from '../Player';
+import { remapCards, getNextIndex } from '../utils';
 import { TableCommand, TableCommandName } from './TableCommand';
 import Timeout = NodeJS.Timeout;
 
@@ -95,7 +97,7 @@ export class Table {
 
     public getSidePots(): SidePot[] {
         const pots: SidePot[] = [];
-        for (let pot of this.game.sidePots) {
+        for (const pot of this.game.sidePots) {
             const potPlayers = pot.players.reduce((prev, cur) => {
                 prev.push(Player.getSidePotPlayer(cur));
                 return prev;
@@ -129,7 +131,7 @@ export class Table {
     private setStartPlayer() {
 
         // heads up rules, dealer is SB and acts first
-        let headsUp = this.players.length === 2;
+        const headsUp = this.players.length === 2;
 
         // just hardcoded dealer is always last and small blind is first
         // check if dealer was set already, so move it further instead
@@ -155,7 +157,7 @@ export class Table {
     }
 
     private removePlayerCards() {
-        for (let player of this.players) {
+        for (const player of this.players) {
             player.cards = [];
         }
     }
@@ -326,7 +328,7 @@ export class Table {
 
         // Deal 2 cards to each player
         for (let x = 0; x < 2; x++) {
-            for (let player of this.players) {
+            for (const player of this.players) {
                 player.cards.push(this.game.deck.pop());
             }
         }
@@ -548,7 +550,7 @@ export class Table {
         return true;
     }
 
-    private processBets(everyoneElseFolded: boolean = false) {
+    private processBets(everyoneElseFolded = false) {
         // let activePlayers = this.players.filter(player => player.bet > 0);
         let activePlayers = this.players.filter(player => player.bet?.amount > 0 || !player.folded && player.allIn && !player.hasSidePot);
         const allInPlayers = activePlayers.filter(player => player.allIn);
@@ -625,13 +627,13 @@ export class Table {
 
         const availablePlayers = this.players.filter(player => !player.folded && !player.hasSidePot);
 
-        let mainPot = this.game.pot;
+        const mainPot = this.game.pot;
         const winners: Winner[] = [];
         winners.push(...this.mapWinners(availablePlayers, everyoneElseFolded, mainPot, 'main'));
 
         // if there were side pots, process the winners of each
         for (let i = 0; i < this.game.sidePots.length; i++) {
-            let sidePot = this.game.sidePots[i];
+            const sidePot = this.game.sidePots[i];
             const potPlayers = sidePot.players.filter(player => !player.folded); // remove folded players
             winners.push(...this.mapWinners(potPlayers, everyoneElseFolded, sidePot.amount, 'sidepot' + i));
         }
@@ -639,7 +641,7 @@ export class Table {
         if (winners.length === 1) {
             this.logger.debug(`Player[${ winners[0].name }] has won the game and receives ${ winners[0].amount }!`);
         } else {
-            let winnerNames = winners.reduce((prev, cur) => prev + ', ' + cur.name, '');
+            const winnerNames = winners.reduce((prev, cur) => prev + ', ' + cur.name, '');
             this.logger.debug(`Players[${ winnerNames }] won!`);
         }
 
@@ -671,27 +673,14 @@ export class Table {
             return availablePlayers;
         }
 
-        this.rankAllHands();
+        rankPlayersHands(availablePlayers, this.game.board);
 
         const winner = availablePlayers.reduce((prev, cur) => {
-            return (prev.hand.value > cur.hand.value) ? prev : cur;
+            return (prev.hand.rank > cur.hand.rank) ? prev : cur;
         });
 
         // then return all players with that hand
-        return availablePlayers.filter(player => player.hand?.value === winner.hand.value);
-    }
-
-    private rankHand(player: Player) {
-        player.hand = PokerEvaluator.evalHand([...player.cards, ...this.game.board]);
-    }
-
-    private rankAllHands() {
-        for (let player of this.players) {
-            // only rank players still in the game
-            if (!player.folded) {
-                this.rankHand(player);
-            }
-        }
+        return availablePlayers.filter(player => player.hand?.rank === winner.hand.rank);
     }
 
     private getPlayerColor(): string {
@@ -722,30 +711,4 @@ export class Table {
 
         this.sendPlayersUpdate();
     }
-}
-
-function getNextIndex(currentIndex: number, array: any[]): number {
-    if (currentIndex >= array.length) {
-        return 0;
-    }
-    return currentIndex === array.length - 1 ? 0 : currentIndex + 1;
-}
-
-export function hideCards(cards: any[]): Card[] | undefined {
-    if (!cards) {
-        return undefined;
-    }
-
-    return cards.map(() => {
-        return { value: 0, figure: 'back' };
-    });
-}
-
-export function remapCards(cards: string[]): Card[] {
-    return cards.map(card => {
-        const c = card.split('');
-        // remap T to 10
-        c[0] = c[0] === 'T' ? '10' : c[0];
-        return { value: c[0], figure: c[1] };
-    });
 }

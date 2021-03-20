@@ -9,8 +9,8 @@ let counter = 1;
 
 describe('Table', () => {
     let table: TableMock;
-    let smallBlind = 10;
-    let bigBlind = 20;
+    const smallBlind = 10;
+    const bigBlind = 20;
 
     beforeEach(() => {
         table = new TableMock({ ...CONFIG.TABLE }, smallBlind, bigBlind, 2, 5, 'TestTable' + counter++);
@@ -113,7 +113,9 @@ describe('Table', () => {
 
         it('should set dealer SB in heads up and act first', () => {
 
+            const player1Idx = table.getPlayerIndexByID(player1);
             const player2Idx = table.getPlayerIndexByID(player2);
+            expect(player1Idx).not.toBe(table.currentPlayer);
             expect(player2Idx).toBe(table.dealer);
             expect(player2Idx).toBe(table.currentPlayer);
         });
@@ -158,7 +160,7 @@ describe('Table', () => {
             it('should set correct next player after folding', () => {
                 table.fold(player3);
 
-                let currentPlayer = table.getPlayerIndexByID(player1);
+                const currentPlayer = table.getPlayerIndexByID(player1);
                 expect(table.currentPlayer).toBe(currentPlayer);
             });
 
@@ -202,7 +204,7 @@ describe('Table', () => {
                 table.call(player1);
 
                 expect(table.getRoundType()).toBe(RoundType.Deal);
-                let currentPlayer = table.getPlayerIndexByID(player2);
+                const currentPlayer = table.getPlayerIndexByID(player2);
                 expect(table.currentPlayer).toBe(currentPlayer);
                 table.check(player2);
 
@@ -218,7 +220,7 @@ describe('Table', () => {
                 table.bet(player2, 100);
 
                 expect(table.getRoundType()).toBe(RoundType.Deal);
-                let currentPlayer = table.getPlayerIndexByID(player3);
+                const currentPlayer = table.getPlayerIndexByID(player3);
                 expect(table.currentPlayer).toBe(currentPlayer);
             });
 
