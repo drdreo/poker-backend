@@ -28,7 +28,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     private logger = new Logger(PokerGateway.name);
 
-
     constructor(private tableService: TableService) {
 
         this.tableService.tableCommands$
@@ -70,8 +69,8 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private handlePlayerDisconnect(playerID: string | undefined, table: string | undefined) {
 
         if (playerID && this.tableService.playerExists(playerID)) {
-            this.tableService.playerLeft(playerID);
             this.logger.debug(`Player[${ playerID }] left!`);
+            this.tableService.playerLeft(playerID);
 
             if (table) {
                 this.sendTo(table, PokerEvent.PlayerLeft, { playerID });
@@ -84,8 +83,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @SubscribeMessage(PlayerEvent.JoinRoom)
     onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName }): WsResponse<ServerJoined> {
         this.logger.debug(`Player[${ playerName }] joining!`);
-
-        const sanitizedRoom = roomName.toLowerCase();
+        let sanitizedRoom = roomName.toLowerCase();
         socket.join(sanitizedRoom);
         socket['table'] = sanitizedRoom;
         socket['playerID'] = playerID; // either overwrite existing one, reset it if its undefined
@@ -98,6 +96,15 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             newPlayerID = playerID;
             const table = this.tableService.playerReconnected(playerID);
             this.logger.debug(`Players last table[${ table.name }] found!`);
+
+            if (table.name !== sanitizedRoom) {
+                this.logger.warn(`Player tried to join other table than they were playing on!`);
+                // leave the passed table and join old one again
+                socket.leave(sanitizedRoom);
+                sanitizedRoom = table.name;
+                socket.join(sanitizedRoom);
+                socket['table'] = sanitizedRoom;
+            }
 
             const gameStatus = table.getGameStatus();
             // tell the player again all information if game started: players, game status, board, pot
@@ -112,6 +119,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             this.sendTo(socket.id, PokerEvent.GameStatus, gameStatus);
 
         } else if (playerName) {   // new Player wants to create or join
+            this.logger.debug(`New Player[${ playerName }] wants to create[${ sanitizedRoom }]!`);
             const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName);
             newPlayerID = response.playerID;
 
