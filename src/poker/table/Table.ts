@@ -374,7 +374,7 @@ export class Table {
         }
 
         const player = this.players[playerIndex];
-        this.logger.debug(`Player[${ player.name }] bet [${ bet }]!`);
+        this.logger.debug(`Player[${ player.name }] bet[${ type }]][${ bet }]!`);
 
         // Check if bet was at allowed by min raise, but let call bets still proceed
         if (type === BetType.Bet || type === BetType.Raise) {
@@ -394,6 +394,7 @@ export class Table {
         // check if all-in
         if (player.chips <= 0) {
             player.allIn = true;
+            type = BetType.AllIn;
             this.logger.debug(player.name + ' went all-in!');
         }
 

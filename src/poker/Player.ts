@@ -10,6 +10,7 @@ export class Player {
     allIn = false;
     hasSidePot = false;
     disconnected = false;
+    afk = false;
 
     constructor(public id: string, public name: string, public color: string, public chips: number) {
     }
@@ -24,7 +25,8 @@ export class Player {
             allIn: player.allIn,
             folded: player.folded,
             color: player.color,
-            disconnected: player.disconnected
+            disconnected: player.disconnected,
+            afk: player.afk
         };
     }
 
