@@ -70,9 +70,10 @@ export class TableService {
 
                 this.destroyTimeout = setTimeout(() => {
                     if (table.players.every(player => player.disconnected)) {
-                        this.logger.debug(`Table[${ table.name }] removed!`);
+                        table.destroy();
                         this.tables = this.tables.filter(t => t.name !== table.name);
                         this.sendCommand({ name: TableCommandName.HomeInfo, table: table.name });
+                        this.logger.debug(`Table[${ table.name }] removed!`);
                     }
                 }, this.CONFIG.AUTO_DESTROY_DELAY);
                 return;

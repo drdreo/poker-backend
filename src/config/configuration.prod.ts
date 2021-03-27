@@ -12,6 +12,7 @@ export const prodConfig = () => ({
     TABLE: {
         END_GAME_DELAY: 5000,
         NEXT_GAME_DELAY: 7500,
-        AUTO_DESTROY_DELAY: 5000
+        AUTO_DESTROY_DELAY: 5000,
+        AFK_DELAY: 30000
     }
 } as Config);

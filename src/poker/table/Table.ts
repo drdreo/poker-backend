@@ -31,7 +31,9 @@ export class Table {
     startTime = new Date();
 
     private logger;
-    private timeouts: Timeout[] = [];
+    private timeoutHandler: {
+        [key: string]: Timeout;
+    } = {};
 
     constructor(
         private CONFIG: TableConfig,
@@ -58,9 +60,12 @@ export class Table {
     }
 
     public destroy(): void {
-        this.timeouts.forEach(timeout => {
-            clearTimeout(timeout);
-        });
+        this.logger.debug(`Destroy!`);
+
+        for (const id in this.timeoutHandler) {
+            this.logger.debug('Clearing unfinished timer: ' + id);
+            clearTimeout(this.timeoutHandler[id]);
+        }
     }
 
     public hasGame(): boolean {
@@ -143,9 +148,9 @@ export class Table {
             this.currentPlayer = headsUp ? this.dealer : 0;
         }
 
-
         this.sendCurrentPlayer();
         this.sendDealerUpdate();
+        this.triggerAFKDetection();
     }
 
     private showPlayersCards() {
@@ -188,6 +193,7 @@ export class Table {
 
         if (sendUpdate) {
             this.sendCurrentPlayer();
+            this.triggerAFKDetection();
         }
     }
 
@@ -465,21 +471,6 @@ export class Table {
         return endOfRound;
     }
 
-    // Either all players have folded, met the biggest bet, or raised / gone all-in.
-    // private hasEveryoneActed(): boolean {
-    //     let everyoneActed = true;
-    //     const maxBet = this.game.getMaxBet();
-    //     for (let i = 0; i < this.players.length; i++) {
-    //         if (this.players[i].folded === false || !this.players[i].allIn) {
-    //             if (this.game.getBet(i) <=  maxBet) {
-    //                 everyoneActed = false;
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //     return everyoneActed;
-    // }
-
     private nextRound(round: RoundType): RoundType {
         switch (round) {
             case RoundType.Deal:
@@ -499,6 +490,11 @@ export class Table {
     }
 
     private progress(): boolean {
+        // every action ends up here, so check if the player returned from AFK
+        if (this.players[this.currentPlayer].afk) {
+            this.players[this.currentPlayer].afk = false;
+        }
+
         const everyoneElseFolded = this.hasEveryoneElseFolded();
 
         if (this.isEndOfRound() || everyoneElseFolded) {
@@ -521,8 +517,9 @@ export class Table {
 
             // if we are in the last round and everyone has either called or folded
             if (round === RoundType.River || everyoneElseFolded) {
-                this.logger.debug('Game ended!');
+                this.game.end();
                 this.sendGameEnded();
+                this.stopAFKDetection();
 
                 // only show cards if it was the last betting round
                 if (round === RoundType.River) {
@@ -531,17 +528,17 @@ export class Table {
 
                 const endGameDelay = everyoneElseFolded ? 2000 : this.CONFIG.END_GAME_DELAY;
                 // wait for the winner announcement. Maximum of 5s card display delay
-                this.timeouts.push(setTimeout(() => {
+                this.delay('announce-winner', () => {
                     this.processWinners(everyoneElseFolded);
                     // hide pot after giving it to the winner
                     this.game.resetPots();
                     this.sendPotUpdate();
 
                     // auto-create new game
-                    this.timeouts.push(setTimeout(() => {
+                    this.delay('new-game', () => {
                         this.newGame();
-                    }, this.CONFIG.NEXT_GAME_DELAY));
-                }, endGameDelay));
+                    }, this.CONFIG.NEXT_GAME_DELAY);
+                }, endGameDelay);
 
                 // stop the game progress since we are done
                 return false;
@@ -549,7 +546,7 @@ export class Table {
 
             this.nextRound(round);
             this.sendGameRoundUpdate();
-            // let player after dealer start, so set it to the dealer
+            // End of Round: always let player after dealer start, so set it to the dealer
             this.currentPlayer = this.dealer;
         }
         return true;
@@ -710,5 +707,42 @@ export class Table {
         });
 
         this.sendPlayersUpdate();
+    }
+
+    /**
+     * Will mark the current player as AFK after a delay.
+     * Started on new game, and on next player.
+     * Stopped when game ended.
+     */
+    private triggerAFKDetection() {
+        this.delay('mark-afk', () => {
+            this.logger.log(`Detected AFK: player[${ this.players[this.currentPlayer].name }]!`);
+
+            this.markPlayerAFK(this.currentPlayer);
+        }, this.CONFIG.AFK_DELAY);
+    }
+
+    private stopAFKDetection() {
+        this.stopDelay('mark-afk');
+    }
+
+    private markPlayerAFK(playerIndex: number) {
+        this.players[playerIndex].afk = true;
+        this.sendPlayersUpdate();
+    }
+
+    private delay(id: string, cb: Function, duration: number) {
+        this.stopDelay(id);
+
+        this.timeoutHandler[id] = setTimeout(() => {
+            cb();
+            delete this.timeoutHandler[id];
+        }, duration);
+    }
+
+    private stopDelay(id: string) {
+        if (id in this.timeoutHandler) {
+            clearTimeout(this.timeoutHandler[id]);
+        }
     }
 }
