@@ -338,7 +338,7 @@ describe('Table', () => {
             table.call(player3);
             table.bet(player1, bigBlind * 3);
 
-            const maxBet = 70; // small blind + 3 * BB
+            const maxBet = 60; //  3 * BB
             expect(table.getGame().getMaxBet()).toBe(maxBet);
         });
 
@@ -348,7 +348,7 @@ describe('Table', () => {
             table.call(player2);
             table.call(player3);
 
-            const pot = 210; //10, 20, 20, 60, 50, 50
+            const pot = 180; // 60, 60, 60
             expect(table.getGame().pot).toBe(pot);
         });
 
@@ -622,8 +622,8 @@ describe('Table', () => {
 
                 table.bet(player3, table.getPlayer(player3).chips); // all in
                 table.call(player1);
-                table.bet(player2, table.getPlayer(player2).chips); // all in
-                table.bet(player1, table.getPlayer(player1).chips);
+                table.bet(player2, 250); // all in
+                table.call(player1); // all in
 
 
                 expect(table.getPlayer(player1).allIn).toBeTruthy();
@@ -656,12 +656,12 @@ describe('Table', () => {
                 table.bet(player3, 50);
                 table.bet(player1, 140);
                 table.call(player2);
-                table.bet(player3, table.getPlayer(player3).chips); // all in
+                table.call(player3); // all in
 
 
                 expect(table.getPlayer(player3).allIn).toBeTruthy();
 
-                expect(table.getGame().pot).toBe(100);
+                expect(table.getGame().pot).toBe(80);
                 expect(table.getGame().sidePots[0]).toBeDefined();
                 expect(table.getGame().sidePots[0].amount).toBe(300);
 
@@ -749,9 +749,9 @@ describe('Table', () => {
             }, 500);
 
             it('should have correct pot if player 3 folds after betting and one is all-in', () => {
-                // bets: 10, 20, 50, 190, 180 = 450
+                // bets: 50, 190, 190 = 430
                 table.bet(player3, 50);
-                table.bet(player1, table.getPlayer(player1).chips); // all in
+                table.bet(player1, table.getPlayer(player1).getAvailableChips()); // all in
                 table.call(player2);
                 table.fold(player3);
 
@@ -762,9 +762,9 @@ describe('Table', () => {
             it('should create a side-pot and let poorer players still go all-in', () => {
 
                 table.bet(player3, 50);
-                table.bet(player1, table.getPlayer(player1).chips); // all in
+                table.bet(player1, table.getPlayer(player1).getAvailableChips()); // all in
                 table.call(player2);
-                table.bet(player3, 50); // all in
+                table.call(player3); // all in
 
                 expect(table.getGame().sidePots[0]).toBeDefined();
                 expect(table.getGame().sidePots[0].amount).toBe(300);
@@ -774,8 +774,8 @@ describe('Table', () => {
             it('should process bets correctly if one did not bet', () => {
                 table.fold(player3);
                 table.check(player1);
-                table.bet(player2, table.getPlayer(player2).chips); // all in
-                table.bet(player1, table.getPlayer(player1).chips); // all in
+                table.bet(player2, table.getPlayer(player2).getAvailableChips()); // all in
+                table.call(player1); // all in
 
                 expect(table.getGame().sidePots[0]).toBeUndefined();
                 expect(table.getGame().pot).toBe(400);

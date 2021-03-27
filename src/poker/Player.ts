@@ -46,6 +46,13 @@ export class Player {
         this.bet = null;
     }
 
+    getAvailableChips(): number {
+        if (this.bet) {
+            return this.chips + this.bet.amount;
+        }
+        return this.chips;
+    }
+
     pay(bet: number) {
         if (this.chips - bet < 0) {
             throw new WsException(`Not sufficient funds to bet[${ bet }]!`);

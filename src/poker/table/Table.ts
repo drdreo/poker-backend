@@ -174,7 +174,7 @@ export class Table {
      - dealer is small blind
 
      */
-    private nextPlayer() {
+    private nextPlayer(sendUpdate = true) {
         let maxTries = 0;
 
         do {
@@ -186,7 +186,9 @@ export class Table {
             this.currentPlayer = this.currentPlayer === this.players.length - 1 ? 0 : this.currentPlayer + 1;
         } while (this.players[this.currentPlayer].folded || this.players[this.currentPlayer].allIn);
 
-        this.sendCurrentPlayer();
+        if (sendUpdate) {
+            this.sendCurrentPlayer();
+        }
     }
 
     public getPlayerIndexByID(playerID: string): number {
@@ -340,15 +342,14 @@ export class Table {
             throw new WsException('Not your turn!');
         }
         const player = this.players[playerIndex];
-        const existingBet = this.game.getBetAmount(playerIndex);
         const maxBet = this.game.getMaxBet();
 
-        if (!maxBet || maxBet - existingBet === 0) {
+        if (!maxBet) {
             throw new WsException(`Can't call. No bet to call.`);
         }
 
-        let betToPay = existingBet ? maxBet - existingBet : maxBet;
-        betToPay = betToPay > player.chips ? player.chips : betToPay;// limit to go all-in
+        const availableChips = player.getAvailableChips();
+        const betToPay = maxBet > availableChips ? availableChips : maxBet;
         this.bet(playerID, betToPay, BetType.Call);
 
         //
@@ -375,12 +376,18 @@ export class Table {
         const player = this.players[playerIndex];
         this.logger.debug(`Player[${ player.name }] bet [${ bet }]!`);
 
-        // Check if bet was at least max bet but let call bets still proceed
-        if (type !== BetType.Call) {
+        // Check if bet was at allowed by min raise, but let call bets still proceed
+        if (type === BetType.Bet || type === BetType.Raise) {
             const maxBet = this.game.getMaxBet();
-            if (bet < maxBet && bet != player.chips) {
+            const minRaise = this.bigBlind; // TODO: Check if min raise is big blind or the current max bet
+            if (bet < maxBet + minRaise && bet != player.chips) {
                 throw new WsException('Can not bet less than max bet!');
             }
+        }
+
+        const existingBet = player.bet;
+        if (existingBet) {
+            player.chips += player.bet.amount;
         }
 
         player.pay(bet);
@@ -391,13 +398,6 @@ export class Table {
         }
 
         const playerBet = new Bet(bet, type);
-
-        // if the player has already bet, add it to the current
-        const existingBet = player.bet;
-        if (existingBet) {
-            playerBet.amount += existingBet.amount;
-        }
-
         player.bet = playerBet;
 
         this.game.bet(playerIndex, playerBet);
@@ -406,8 +406,11 @@ export class Table {
 
         const next = this.progress();
         if (next) {
-            this.nextPlayer();
-            this.sendPlayersUpdate();
+            const shouldSendUpdate = type !== BetType.SmallBlind;
+            this.nextPlayer(shouldSendUpdate);
+            if (shouldSendUpdate) {
+                this.sendPlayersUpdate();
+            }
         }
     }
 
@@ -425,8 +428,8 @@ export class Table {
         const next = this.progress();
         if (next) {
             this.nextPlayer();
-            this.sendPlayersUpdate();
         }
+        this.sendPlayersUpdate();
     }
 
     public check(playerID: string) {
@@ -525,6 +528,7 @@ export class Table {
                     this.showPlayersCards(); // showing cards twice if all-in situation
                 }
 
+                const endGameDelay = everyoneElseFolded ? 2000 : this.CONFIG.END_GAME_DELAY;
                 // wait for the winner announcement. Maximum of 5s card display delay
                 this.timeouts.push(setTimeout(() => {
                     this.processWinners(everyoneElseFolded);
@@ -536,7 +540,7 @@ export class Table {
                     this.timeouts.push(setTimeout(() => {
                         this.newGame();
                     }, this.CONFIG.NEXT_GAME_DELAY));
-                }, this.CONFIG.END_GAME_DELAY));
+                }, endGameDelay));
 
                 // stop the game progress since we are done
                 return false;
@@ -675,7 +679,7 @@ export class Table {
 
         rankPlayersHands(availablePlayers, this.game.board);
 
-      return getHandWinners(availablePlayers);
+        return getHandWinners(availablePlayers);
     }
 
     private getPlayerColor(): string {
