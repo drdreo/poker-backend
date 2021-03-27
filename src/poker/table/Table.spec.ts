@@ -409,12 +409,12 @@ describe('Table', () => {
                 expect(table.getGame().pot).toBe(60);
             });
 
-            it('should have 120 chips in the pot after raising', () => {
-                table.bet(player1, smallBlind);
-                table.bet(player2, bigBlind);
+            it('should have 180 chips in the pot after raising', () => {
+                table.bet(player1, bigBlind);
+                table.bet(player2, bigBlind * 2);
                 table.call(player3);
                 table.call(player1);
-                expect(table.getGame().pot).toBe(120);
+                expect(table.getGame().pot).toBe(180);
             });
 
             it('should have 3 cards on the board', () => {
@@ -468,29 +468,29 @@ describe('Table', () => {
             describe('Round(Turn)', () => {
                 beforeEach(() => {
                     // Round(Flop)
-                    table.bet(player1, smallBlind);
-                    table.bet(player2, bigBlind);
+                    table.bet(player1, bigBlind);
+                    table.bet(player2, bigBlind * 2);
                     table.call(player3);
                     table.call(player1);
                 });
 
-                it('should have 120 chips in the pot', () => {
-                    expect(table.getGame().pot).toBe(120);
+                it('should have 180 chips in the pot', () => {
+                    expect(table.getGame().pot).toBe(180);
                 });
 
-                it('should have 120 chips in the pot after checking', () => {
+                it('should have 180 chips in the pot after checking', () => {
                     table.check(player1);
                     table.check(player2);
                     table.check(player3);
-                    expect(table.getGame().pot).toBe(120);
+                    expect(table.getGame().pot).toBe(180);
                 });
 
-                it('should have 160 chips in the pot after one folded', () => {
+                it('should have 220 chips in the pot after one folded', () => {
                     table.bet(player1, bigBlind);
                     table.call(player2);
                     table.fold(player3);
 
-                    expect(table.getGame().pot).toBe(160);
+                    expect(table.getGame().pot).toBe(220);
                 });
 
                 it('should have 4 cards on the board', () => {
@@ -500,34 +500,33 @@ describe('Table', () => {
                 describe('Round(River)', () => {
                     beforeEach(() => {
                         // Round(Turn)
-                        table.bet(player1, smallBlind);
-                        table.bet(player2, bigBlind);
+                        table.bet(player1, bigBlind);
+                        table.call(player2);
                         table.call(player3);
-                        table.call(player1);
                     });
 
-                    it('should have 180 chips in the pot', () => {
-                        expect(table.getGame().pot).toBe(180);
+                    it('should have 240 chips in the pot', () => {
+                        expect(table.getGame().pot).toBe(240);
                     });
 
                     it('should have 5 cards in the board', () => {
                         expect(table.getGame().board.length).toEqual(5);
                     });
 
-                    it('should have a pot of 180 after checking', () => {
+                    it('should have a pot of 240 after checking', () => {
                         table.check(player1);
                         table.check(player2);
                         table.check(player3);
 
-                        expect(table.getGame().pot).toEqual(180);
+                        expect(table.getGame().pot).toEqual(240);
                     });
 
-                    it('should have a pot of 240', () => {
+                    it('should have a pot of 300', () => {
                         table.bet(player1, bigBlind);
                         table.call(player2);
                         table.call(player3);
 
-                        expect(table.getGame().pot).toEqual(240);
+                        expect(table.getGame().pot).toEqual(300);
                     });
 
                     it('should have ended when everyone checks', done => {
@@ -546,8 +545,8 @@ describe('Table', () => {
                         table.commands$.subscribe((command) => {
                             if (command.name === TableCommandName.GameWinners) {
                                 const { winners } = command.data;
-                                expect(table.getPlayer(winners[0].id).chips).toBe(1160);
-                                expect(winners[0].amount).toBe(240);
+                                expect(table.getPlayer(winners[0].id).chips).toBe(1200);
+                                expect(winners[0].amount).toBe(300);
                                 done();
                             }
                         });
@@ -559,10 +558,12 @@ describe('Table', () => {
                         table.getPlayer(player3).cards = ['2D', '9C'];
                         table.getGame().board = ['AD', 'KD', 'QD', '2S', '2C'];
 
-                        // coins: 920, pot: 240 => 1160
+                        // coins: 900, pot: 300 => 1200
                         table.bet(player1, bigBlind);
                         table.call(player2);
                         table.call(player3);
+                        expect(table.getGame().pot).toEqual(300);
+
                     }, 1000);
                 });
             });
@@ -686,11 +687,11 @@ describe('Table', () => {
                 expect(table.getGame().pot).toBe(40);
 
                 table.bet(player1, 20);
-                table.bet(player2, 30);
+                table.bet(player2, 40);
                 table.call(player1);
 
                 expect(table.getRoundType()).toBe(RoundType.River);
-                expect(table.getGame().pot).toBe(100);
+                expect(table.getGame().pot).toBe(120);
                 expect(table.getGame().sidePots[0].amount).toBe(300);
                 expect(table.getGame().sidePots[1]).toBeUndefined();
             });
