@@ -5,7 +5,7 @@ import {
 import { Client, Server, Socket } from 'socket.io';
 import {
     PokerEvent, GameStatus, GameRoundUpdate, GameBoardUpdate, GameDealerUpdate, GameCurrentPlayer, GameWinners, GamePotUpdate,
-    GamePlayersUpdate, PlayerBet, HomeInfo, PlayerEvent, ServerJoined, PlayerChecked, PlayerCalled, PlayerFolded, MaxBetUpdate
+    GamePlayersUpdate, PlayerBet, HomeInfo, PlayerEvent, ServerJoined, PlayerChecked, PlayerCalled, PlayerFolded, MaxBetUpdate, PlayerKicked
 } from '../../shared/src';
 import { SentryInterceptor } from '../sentry.interceptor';
 import { Player } from './Player';
@@ -149,6 +149,11 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.handlePlayerDisconnect(socket['playerID'], socket['table']);
     }
 
+    @SubscribeMessage(PlayerEvent.VoteKick)
+    onVoteKick(@ConnectedSocket() socket: Socket, @MessageBody() { kickPlayerID }) {
+        this.tableService.voteKick(socket['table'], socket['playerID'], kickPlayerID);
+    }
+
     /**
      *
      * Game Actions
@@ -275,6 +280,10 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 this.sendTo(table, PokerEvent.TableClosed);
                 break;
 
+            case TableCommandName.PlayerKicked :
+                const response: PlayerKicked = { kickedPlayer: data.kickedPlayer };
+                this.sendTo(table, PokerEvent.PlayerKick, response);
+                break;
             default:
                 this.logger.warn(`Command[${ name }] was not handled!`);
                 break;

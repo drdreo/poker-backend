@@ -11,6 +11,7 @@ export class Player {
     hasSidePot = false;
     disconnected = false;
     afk = false;
+    kickVotes: Set<string> = new Set()
 
     constructor(public id: string, public name: string, public color: string, public chips: number) {
     }

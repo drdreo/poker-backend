@@ -44,8 +44,8 @@ export class TableService {
         });
     }
 
-    getTable(roomName: string): Table {
-        return this.tables.find(table => table.name === roomName);
+    getTable(name: string): Table {
+        return this.tables.find(table => table.name === name);
     }
 
     getAllTables() {
@@ -111,14 +111,24 @@ export class TableService {
     }
 
     startGame(tableName: string) {
-        const table = this.tables.find(table => table.name === tableName);
+        const table = this.getTable(tableName);
         if (!table) {
             throw new WsException(`Can not start game on Table[${ tableName }] because it does not exist.`);
         }
-        // TODO: prevent starting a new game if current is in progress
+        if (table.hasGame()) {
+            this.logger.warn(`Table[${ tableName }] has already a game in progress!`);
+        }
         table.newGame();
     }
 
+    voteKick(tableName: string, playerID: string, kickPlayerID: string) {
+        const table = this.getTable(tableName);
+        if (!table) {
+            throw new WsException(`Can not vote kick on Table[${ tableName }] because it does not exist.`);
+        }
+
+        table.voteKick(playerID, kickPlayerID);
+    }
 
     /***********************
      * Game methods

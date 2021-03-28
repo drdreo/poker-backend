@@ -1,7 +1,7 @@
 import { BetType, Card, Winner, GameStatus, SidePot } from '../../../shared/src';
 import { Round } from '../game/Round';
 
-export enum TableCommandName{
+export enum TableCommandName {
     HomeInfo = 'home_info',
     GameStarted = 'game_started',
     PlayerUpdate = 'player_update',
@@ -17,6 +17,7 @@ export enum TableCommandName{
     BoardUpdated = 'board_updated',
     NewRound = 'new_round',
     TableClosed = 'table_closed',
+    PlayerKicked = 'player_kicked'
 }
 
 export interface TableCommand {
@@ -36,5 +37,6 @@ export interface TableCommand {
         round?: Round;
         winners?: Winner[];
         gameStatus?: GameStatus;
+        kickedPlayer?: string;
     };
 }

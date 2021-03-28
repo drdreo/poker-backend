@@ -68,6 +68,10 @@ export class Table {
         }
     }
 
+    public getGame(): Game {
+        return this.game;
+    }
+
     public hasGame(): boolean {
         return !!this.game;
     }
@@ -92,6 +96,18 @@ export class Table {
         return this.players.some(player => player.id === playerID);
     }
 
+    private getPlayerColor(): string {
+        return this.playerColors.pop();
+    }
+
+    // Test utils method
+    public getRoundType(): RoundType {
+        return this.game.round.type;
+    }
+
+    private resetPlayerBets() {
+        this.players.map(player => player.bet = null);
+    }
 
     public getGameStatus(): GameStatus {
         if (this.game) {
@@ -166,7 +182,6 @@ export class Table {
             player.cards = [];
         }
     }
-
 
     /***
      * Player Turn logic:
@@ -249,7 +264,7 @@ export class Table {
         });
     }
 
-    public sendGameStarted() {
+    private sendGameStarted() {
         this.commands$.next({
             name: TableCommandName.GameStarted,
             table: this.name,
@@ -264,7 +279,7 @@ export class Table {
         });
     }
 
-    public sendTableClosed() {
+    private sendTableClosed() {
         this.commands$.next({
             name: TableCommandName.TableClosed,
             table: this.name
@@ -279,7 +294,7 @@ export class Table {
         });
     }
 
-    public sendCurrentPlayer() {
+    sendCurrentPlayer() {
         const currentPlayer = this.players[this.currentPlayer];
         if (currentPlayer) {
             this.commands$.next({
@@ -293,7 +308,7 @@ export class Table {
 
     }
 
-    public sendDealerUpdate() {
+    sendDealerUpdate() {
         this.commands$.next({
             name: TableCommandName.Dealer,
             table: this.name,
@@ -301,7 +316,15 @@ export class Table {
         });
     }
 
-    public newGame() {
+    private sendPlayerKicked(playerName: string) {
+        this.commands$.next({
+            name: TableCommandName.PlayerKicked,
+            table: this.name,
+            data: { kickedPlayer: playerName }
+        });
+    }
+
+    newGame() {
 
         if (this.players.length < this.minPlayers) {
             throw new WsException('Cant start game. Too less players are in.');
@@ -342,7 +365,7 @@ export class Table {
         }
     }
 
-    public call(playerID: string) {
+    call(playerID: string) {
         const playerIndex = this.getPlayerIndexByID(playerID);
         if (playerIndex !== this.currentPlayer) {
             throw new WsException('Not your turn!');
@@ -372,7 +395,7 @@ export class Table {
         // }
     }
 
-    public bet(playerID: string, bet: number, type: BetType = BetType.Bet) {
+    bet(playerID: string, bet: number, type: BetType = BetType.Bet) {
 
         const playerIndex = this.getPlayerIndexByID(playerID);
         if (playerIndex !== this.currentPlayer) {
@@ -421,7 +444,7 @@ export class Table {
         }
     }
 
-    public fold(playerID: string) {
+    fold(playerID: string) {
         const playerIndex = this.getPlayerIndexByID(playerID);
         if (playerIndex !== this.currentPlayer) {
             throw new WsException('Not your turn!');
@@ -439,7 +462,7 @@ export class Table {
         this.sendPlayersUpdate();
     }
 
-    public check(playerID: string) {
+    check(playerID: string) {
         const playerIndex = this.getPlayerIndexByID(playerID);
         if (playerIndex !== this.currentPlayer) {
             throw new WsException('Not your turn!');
@@ -453,6 +476,21 @@ export class Table {
             this.nextPlayer();
             this.sendPlayersUpdate();
         }
+    }
+
+
+    voteKick(playerID: string, kickPlayerID: string) {
+        const votesNeeded = Math.round(this.players.length / 2);
+        const player = this.getPlayer(kickPlayerID);
+        if (player.afk) {
+            player.kickVotes.add(playerID);
+            if (player.kickVotes.size >= votesNeeded) {
+                this.sendPlayerKicked(player.name);
+            }
+        } else {
+            this.logger.warn('Can not kick player who is not AFK!');
+        }
+
     }
 
     private isEndOfRound(): boolean {
@@ -491,9 +529,7 @@ export class Table {
 
     private progress(): boolean {
         // every action ends up here, so check if the player returned from AFK
-        if (this.players[this.currentPlayer].afk) {
-            this.players[this.currentPlayer].afk = false;
-        }
+        this.unmarkPlayerAFK(this.currentPlayer);
 
         const everyoneElseFolded = this.hasEveryoneElseFolded();
 
@@ -680,23 +716,6 @@ export class Table {
         return getHandWinners(availablePlayers);
     }
 
-    private getPlayerColor(): string {
-        return this.playerColors.pop();
-    }
-
-    // Test utils method
-    public getRoundType(): RoundType {
-        return this.game.round.type;
-    }
-
-    public getGame(): Game {
-        return this.game;
-    }
-
-    private resetPlayerBets() {
-        this.players.map(player => player.bet = null);
-    }
-
     private removePoorPlayers() {
         this.players = this.players.filter(player => {
             if (player.chips > this.bigBlind) {
@@ -729,6 +748,14 @@ export class Table {
     private markPlayerAFK(playerIndex: number) {
         this.players[playerIndex].afk = true;
         this.sendPlayersUpdate();
+    }
+
+    private unmarkPlayerAFK(playerIndex: number) {
+        const player = this.players[playerIndex];
+        if (player.afk) {
+            player.afk = false;
+            player.kickVotes.clear();
+        }
     }
 
     private delay(id: string, cb: Function, duration: number) {
