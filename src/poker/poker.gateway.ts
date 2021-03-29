@@ -120,12 +120,19 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         } else if (playerName) {   // new Player wants to create or join
             this.logger.debug(`New Player[${ playerName }] wants to create[${ sanitizedRoom }]!`);
-            const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName);
-            newPlayerID = response.playerID;
+            try {
+                const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName);
+                newPlayerID = response.playerID;
+                this.sendHomeInfo();
+            } catch (e) {
+                this.logger.debug('Couldnt create or join table, join as spectator!');
+                this.onJoinSpectator(socket, { roomName });
+                return { event: PokerEvent.Joined, data: { playerID, table: sanitizedRoom } };
+            }
 
-            this.sendHomeInfo();
-        } else { // Spectator joining
-            this.logger.debug(`Spectator joined!`);
+        } else {
+            // Spectator joining
+            throw new Error('Spectator should not be able to join this way!');
         }
 
         // connect the socket with its playerID
@@ -136,6 +143,29 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         this.tableService.getTable(sanitizedRoom).sendPlayersUpdate();
         return { event: PokerEvent.Joined, data: { playerID: newPlayerID, table: sanitizedRoom } };
+    }
+
+    @SubscribeMessage(PlayerEvent.SpectatorJoin)
+    onJoinSpectator(@ConnectedSocket() socket: Socket, @MessageBody() { roomName }) {
+        const sanitizedRoom = roomName.toLowerCase();
+
+        this.logger.debug(`Spectator trying to join table[${ sanitizedRoom }]!`);
+        const table = this.tableService.getTable(sanitizedRoom);
+        if (table) {
+            socket.join(sanitizedRoom);
+            socket['table'] = sanitizedRoom;
+
+            const gameStatus = table.getGameStatus();
+            // tell the player again all information if game started: players, game status, board, pot
+            if (gameStatus === GameStatus.Started) {
+                table.sendCurrentPlayer();
+                table.sendDealerUpdate();
+                table.sendGameBoardUpdate();
+                table.sendPotUpdate();
+                table.sendMaxBetUpdate();
+            }
+        }
+        return { event: PokerEvent.Joined, data: { table: sanitizedRoom } };
     }
 
     @SubscribeMessage(PlayerEvent.StartGame)

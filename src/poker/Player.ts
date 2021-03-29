@@ -27,7 +27,8 @@ export class Player {
             folded: player.folded,
             color: player.color,
             disconnected: player.disconnected,
-            afk: player.afk
+            afk: player.afk,
+            kickVotes: [...player.kickVotes]
         };
     }
 

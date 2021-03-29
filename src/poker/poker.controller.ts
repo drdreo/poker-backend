@@ -1,4 +1,5 @@
 import { Controller, Get, HttpException, HttpStatus, Param, UseInterceptors } from '@nestjs/common';
+import { TableResponse } from '@shared/src';
 import { SentryInterceptor } from '../sentry.interceptor';
 import { TableService } from './table/table.service';
 
@@ -23,10 +24,10 @@ export class PokerController {
     }
 
     @Get('/table/:name')
-    getTable(@Param('name') name) {
+    getTable(@Param('name') name): TableResponse {
         const table = this.tableService.getTable(name);
         if (table) {
-            return { name: table.name, players: table.getPlayersPreview() };
+            return { name: table.name, startTime: table.startTime, players: table.getPlayersPreview() };
         }
 
         throw new HttpException('Table does not exist!', HttpStatus.NOT_FOUND);
