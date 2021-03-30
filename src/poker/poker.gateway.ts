@@ -156,7 +156,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             socket['table'] = sanitizedRoom;
 
             const gameStatus = table.getGameStatus();
-            // tell the player again all information if game started: players, game status, board, pot
+            // tell the spectator all information if game started: players, game status, board, pot
             if (gameStatus === GameStatus.Started) {
                 table.sendCurrentPlayer();
                 table.sendDealerUpdate();
