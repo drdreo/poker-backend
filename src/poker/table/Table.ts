@@ -22,7 +22,23 @@ export class Table {
     ];
 
     players: Player[] = [];
-    dealer: number;	// index of the current dealer
+
+    setDealer(player: Player) {
+        const dealer = this.dealer;
+        if (dealer) {
+            dealer.dealer = false;
+        }
+        this.players.find(p => p.id === player.id).dealer = true;
+    }
+
+    moveDealer(dealerIndex: number) {
+        this.setDealer(this.players[getNextIndex(dealerIndex, this.players)]);
+    }
+
+    get dealer(): Player {
+        return this.players.find(player => player.dealer);
+    }
+
     currentPlayer: number; // index of the current player
     private game: Game | undefined;
 
@@ -165,11 +181,14 @@ export class Table {
         // just hardcoded dealer is always last and small blind is first
         // check if dealer was set already, so move it further instead
         if (this.dealer) {
-            this.dealer = getNextIndex(this.dealer, this.players);
-            this.currentPlayer = headsUp ? this.dealer : getNextIndex(this.dealer, this.players);
+            let dealerIndex = this.getPlayerIndexByID(this.dealer.id);
+            this.moveDealer(dealerIndex);
+            dealerIndex = this.getPlayerIndexByID(this.dealer.id);
+            this.currentPlayer = headsUp ? dealerIndex : getNextIndex(dealerIndex, this.players);
         } else {
-            this.dealer = this.players.length - 1;
-            this.currentPlayer = headsUp ? this.dealer : 0;
+            this.setDealer(this.players[this.players.length - 1]);
+            const dealerIndex = this.getPlayerIndexByID(this.dealer.id);
+            this.currentPlayer = headsUp ? dealerIndex : 0;
         }
 
         this.sendCurrentPlayer();
@@ -320,7 +339,7 @@ export class Table {
         this.commands$.next({
             name: TableCommandName.Dealer,
             table: this.name,
-            data: { dealerPlayerID: this.players[this.dealer].id }
+            data: { dealerPlayerID: this.dealer.id }
         });
     }
 
@@ -509,7 +528,11 @@ export class Table {
         this.sendPlayerKicked(kickPlayer.name);
         const wasCurrentPlayer = this.isCurrentPlayer(kickPlayer.id);
         const wasLastPlayer = this.currentPlayer === this.players.length - 1;
-        const kickedPlayerIndex =  this.getPlayerIndexByID(kickPlayer.id);
+        const wasDealer = kickPlayer.id === this.dealer.id;
+        const kickedPlayerIndex = this.getPlayerIndexByID(kickPlayer.id);
+        if (wasDealer) {
+            this.moveDealer(kickedPlayerIndex);
+        }
         this.players = this.players.filter(player => player.id != kickPlayer.id);
 
         // clean up bets as well, TODO: check sidepots
@@ -626,7 +649,7 @@ export class Table {
             this.nextRound(round);
             this.sendGameRoundUpdate();
             // End of Round: always let player after dealer start, so set it to the dealer
-            this.currentPlayer = this.dealer;
+            this.currentPlayer = this.getPlayerIndexByID(this.dealer.id);
         }
         return true;
     }
@@ -759,14 +782,21 @@ export class Table {
     }
 
     private removePoorPlayers() {
+        let dealerIndex;
         this.players = this.players.filter(player => {
             if (player.chips > this.bigBlind) {
                 return true;
             }
             this.logger.verbose(`Removing player[${ player.name }] from the table because chips[${ player.chips }] are not enough.`);
+            if (player.dealer) {
+                dealerIndex = this.getPlayerIndexByID(player.id);
+            }
             return false;
         });
 
+        if (dealerIndex) {
+            this.moveDealer(dealerIndex);
+        }
         this.sendPlayersUpdate();
     }
 

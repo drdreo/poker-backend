@@ -117,7 +117,7 @@ describe('Table', () => {
             const player1Idx = table.getPlayerIndexByID(player1);
             const player2Idx = table.getPlayerIndexByID(player2);
             expect(player1Idx).not.toBe(table.currentPlayer);
-            expect(player2Idx).toBe(table.dealer);
+            expect(player2).toBe(table.dealer.id);
             expect(player2Idx).toBe(table.currentPlayer);
         });
     });
@@ -154,7 +154,7 @@ describe('Table', () => {
 
             it('should set last player as dealer', () => {
                 const player3Idx = table.getPlayerIndexByID(player3);
-                expect(player3Idx).toBe(table.dealer);
+                expect(player3).toBe(table.dealer.id);
                 expect(player3Idx).toBe(table.currentPlayer); // current player should be 3rd player, 1 and 2 are blinds
             });
 
@@ -937,6 +937,14 @@ describe('Table', () => {
                 expect(table.getPlayer(player2).kickVotes.size).toBe(0);
             });
 
+            it('should not kick yourself', () => {
+                expect(() => {
+                    table.voteKick(player2, player2);
+                }).toThrow();
+
+                expect(kickPlayer.kickVotes.size).toBe(0);
+            });
+
             it('should not kick a player with < 50% votes', () => {
                 table.voteKick(player1, player2);
                 expect(kickPlayer.kickVotes.size).toBe(1);
@@ -1023,7 +1031,6 @@ describe('Table', () => {
                 expect(table.players.length).toBe(2);
                 expect(table.getGame().pot).toBe(400);
             });
-
         });
     });
 
