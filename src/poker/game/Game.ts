@@ -52,6 +52,10 @@ export class Game {
         return !!this.round.bets[playerIndex];
     }
 
+    removeBet(playerIndex: number): void {
+        this.bet(playerIndex, new Bet(0, BetType.Removed));
+    }
+
     // Returns the index of the player with the last bet or undefined
     getLastBet(): { index: number; bet: number } | null {
 

@@ -1,5 +1,6 @@
 import { RoundType } from '../../../shared/src';
 import { testConfig } from '../../config/configuration.test';
+import { Player } from '../Player';
 import { TableMock } from './Table.mock';
 import { TableCommandName } from './TableCommand';
 
@@ -123,9 +124,9 @@ describe('Table', () => {
 
     describe('Game Mechanics (3 players)', () => {
 
-        let player1;
-        let player2;
-        let player3;
+        let player1: string;
+        let player2: string;
+        let player3: string;
 
         beforeEach(() => {
             player1 = table.addPlayer('Tester1', 1000);
@@ -737,7 +738,8 @@ describe('Table', () => {
                 // rig the test player cards and the board
                 table.getPlayer(player1).cards = ['AD', 'AS'];
                 table.getPlayer(player3).cards = ['2D', '9C'];
-                table.getGame().deck = table.getGame().deck.filter(card => card !== 'AD' && card !== 'AS' && card !== '2D' && card !=='9C');
+                table.getGame().deck = table.getGame().deck
+                                            .filter(card => card !== 'AD' && card !== 'AS' && card !== '2D' && card !== '9C');
 
 
                 table.bet(player3, table.getPlayer(player3).chips); // all in
@@ -914,6 +916,115 @@ describe('Table', () => {
 
         test.todo('should kick player from table if no chips left');
         test.todo('should kick all-in player after lose');
+
+        describe('AFK', () => {
+            let kickPlayer: Player;
+
+            beforeEach(() => {
+                kickPlayer = table.getPlayer(player2);
+                kickPlayer.afk = true;
+            });
+
+            it('should kick an afk player', () => {
+                table.voteKick(player1, player2);
+                expect(kickPlayer.kickVotes.size).toBe(1);
+            });
+
+            it('should not kick an active player', () => {
+                kickPlayer.afk = false;
+                table.voteKick(player1, player2);
+                expect(table.getPlayer(player2).afk).toBe(false);
+                expect(table.getPlayer(player2).kickVotes.size).toBe(0);
+            });
+
+            it('should not kick a player with < 50% votes', () => {
+                table.voteKick(player1, player2);
+                expect(kickPlayer.kickVotes.size).toBe(1);
+                expect(table.players.length).toBe(3);
+            });
+
+            it('should kick a player with > 50% votes', () => {
+                table.voteKick(player1, player2);
+                table.voteKick(player3, player2);
+                expect(kickPlayer.kickVotes.size).toBe(2);
+                expect(table.players.length).toBe(2);
+            });
+
+            it('should not kick a player who returned from afk', () => {
+                kickPlayer = table.getPlayer(player3);
+                kickPlayer.afk = true;
+                table.voteKick(player1, player3);
+                table.call(player3);
+                table.voteKick(player2, player3);
+                expect(kickPlayer.afk).toBe(false);
+                expect(kickPlayer.kickVotes.size).toBe(0);
+                expect(table.players.length).toBe(3);
+            });
+
+            it('should kick first player and have same current player', () => {
+                kickPlayer = table.getPlayer(player1);
+                kickPlayer.afk = true;
+
+                expect(table.getCurrentPlayer().id).toBe(player3);
+
+                table.voteKick(player2, player1);
+                table.voteKick(player3, player1);
+
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player3);
+            });
+
+            it('should kick player in the middle and set next player', () => {
+                table.voteKick(player1, player2);
+                table.voteKick(player3, player2);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player3);
+            });
+
+            it('should kick last player and set first player as next', () => {
+                kickPlayer = table.getPlayer(player3);
+                kickPlayer.afk = true;
+                table.voteKick(player1, player3);
+                table.voteKick(player2, player3);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player1);
+            });
+
+            it('should kick first player (current) and set next player', () => {
+                kickPlayer = table.getPlayer(player1);
+                kickPlayer.afk = true;
+
+                table.call(player3);
+                table.voteKick(player2, player1);
+                table.voteKick(player3, player1);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player2);
+            });
+
+            it('should kick first player (current) and set next player', () => {
+                table.call(player3);
+                table.call(player1);
+                table.voteKick(player1, player2);
+                table.voteKick(player3, player2);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player3);
+            });
+
+            it('should exclude the kicked players bet from the pot', () => {
+                table.bet(player3, 100);
+                table.bet(player1, 200);
+                table.call(player2);
+
+                kickPlayer = table.getPlayer(player3);
+                kickPlayer.afk = true;
+
+                table.voteKick(player1, player3);
+                table.voteKick(player2, player3);
+                expect(table.players.length).toBe(2);
+                expect(table.getGame().pot).toBe(400);
+            });
+
+        });
     });
 
     describe('Game Mechanics (5+ players)', () => {

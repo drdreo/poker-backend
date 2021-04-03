@@ -96,6 +96,14 @@ export class Table {
         return this.players.some(player => player.id === playerID);
     }
 
+    private isCurrentPlayer(playerID: string) {
+        return this.getCurrentPlayer().id === playerID;
+    }
+
+    public getCurrentPlayer(): Player {
+        return this.players[this.currentPlayer];
+    }
+
     private getPlayerColor(): string {
         return this.playerColors.pop();
     }
@@ -203,7 +211,7 @@ export class Table {
             }
 
             // if last player, continue with first
-            this.currentPlayer = this.currentPlayer === this.players.length - 1 ? 0 : this.currentPlayer + 1;
+            this.currentPlayer = this.currentPlayer >= this.players.length - 1 ? 0 : this.currentPlayer + 1;
         } while (this.players[this.currentPlayer].folded || this.players[this.currentPlayer].allIn);
 
         if (sendUpdate) {
@@ -403,7 +411,7 @@ export class Table {
         }
 
         const player = this.players[playerIndex];
-        this.logger.debug(`Player[${ player.name }] bet[${ type }]][${ bet }]!`);
+        this.logger.debug(`Player[${ player.name }] bet[${ type }][${ bet }]!`);
 
         // Check if bet was at allowed by min raise, but let call bets still proceed
         if (type === BetType.Bet || type === BetType.Raise) {
@@ -480,17 +488,50 @@ export class Table {
 
 
     voteKick(playerID: string, kickPlayerID: string) {
-        const votesNeeded = Math.round(this.players.length / 2);
-        const player = this.getPlayer(kickPlayerID);
-        if (player.afk) {
-            player.kickVotes.add(playerID);
-            if (player.kickVotes.size >= votesNeeded) {
-                this.sendPlayerKicked(player.name);
+        if (playerID === kickPlayerID) {
+            throw new WsException('Stop kicking yourself!');
+        }
+
+        const votesNeeded = Math.max(Math.round(this.players.length / 2), 2);
+        const kickPlayer = this.getPlayer(kickPlayerID);
+        if (kickPlayer.afk) {
+            kickPlayer.kickVotes.add(playerID);
+            if (kickPlayer.kickVotes.size >= votesNeeded) {
+                this.kickPlayer(kickPlayer);
             }
         } else {
             this.logger.warn('Can not kick player who is not AFK!');
         }
 
+    }
+
+    private kickPlayer(kickPlayer: Player) {
+        this.sendPlayerKicked(kickPlayer.name);
+        const wasCurrentPlayer = this.isCurrentPlayer(kickPlayer.id);
+        const wasLastPlayer = this.currentPlayer === this.players.length - 1;
+        const kickedPlayerIndex =  this.getPlayerIndexByID(kickPlayer.id);
+        this.players = this.players.filter(player => player.id != kickPlayer.id);
+
+        // clean up bets as well, TODO: check sidepots
+        this.game.removeBet(kickedPlayerIndex);
+
+        const next = this.progress(false);
+        if (next) {
+            if (wasCurrentPlayer) {
+                // rewrite current player so it works with nextPlayer() , first --> last, others --> previous
+                if (this.currentPlayer === 0) {
+                    this.currentPlayer = this.players.length - 1;
+                } else {
+                    this.currentPlayer = this.currentPlayer - 1;
+                }
+                this.nextPlayer();
+            } else if (wasLastPlayer) {
+                this.logger.warn('kickPlayer wasn\'t  triggered on the current player!');
+                this.currentPlayer = this.currentPlayer - 1;
+            }
+        }
+
+        this.sendPlayersUpdate();
     }
 
     private isEndOfRound(): boolean {
@@ -527,9 +568,11 @@ export class Table {
         return this.game.round.type;
     }
 
-    private progress(): boolean {
+    private progress(action = true): boolean {
         // every action ends up here, so check if the player returned from AFK
-        this.unmarkPlayerAFK(this.currentPlayer);
+        if (action) {
+            this.unmarkPlayerAFK(this.currentPlayer);
+        }
 
         const everyoneElseFolded = this.hasEveryoneElseFolded();
 
@@ -589,7 +632,6 @@ export class Table {
     }
 
     private processBets(everyoneElseFolded = false) {
-        // let activePlayers = this.players.filter(player => player.bet > 0);
         let activePlayers = this.players.filter(player => player.bet?.amount > 0 || !player.folded && player.allIn && !player.hasSidePot);
         const allInPlayers = activePlayers.filter(player => player.allIn);
 

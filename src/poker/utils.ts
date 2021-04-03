@@ -5,10 +5,7 @@ export function delay(delay: number) {
 }
 
 export function getNextIndex(currentIndex: number, array: any[]): number {
-    if (currentIndex >= array.length) {
-        return 0;
-    }
-    return currentIndex === array.length - 1 ? 0 : currentIndex + 1;
+    return currentIndex >= array.length - 1 ? 0 : currentIndex + 1;
 }
 
 export function hideCards(cards: any[]): Card[] | undefined {
