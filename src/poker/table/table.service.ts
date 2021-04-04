@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WsException } from '@nestjs/websockets';
+import { PokerConfig } from '@shared/src';
 import { Subject } from 'rxjs';
 import { Config } from '../../config/configuration';
 import { TableConfig } from '../../config/table.config';
@@ -31,8 +32,8 @@ export class TableService {
         this._tableCommands$.next(command);
     }
 
-    createTable(name: string): Table {
-        const table = new Table(this.CONFIG, 10, 20, 2, 8, name);
+    createTable(name: string, config?: PokerConfig): Table {
+        const table = new Table(this.CONFIG, name, config);
         table.commands$ = this._tableCommands$;
         this.tables.push(table);
         return table;
@@ -95,12 +96,12 @@ export class TableService {
      *
      * @returns the new players ID
      */
-    createOrJoinTable(tableName: string, playerName: string): { playerID: string } {
+    createOrJoinTable(tableName: string, playerName: string, config?: PokerConfig): { playerID: string } {
         let table = this.getTable(tableName);
 
         if (!table) {
             this.logger.debug(`Player[${ playerName }] created a table!`);
-            table = this.createTable(tableName);
+            table = this.createTable(tableName, config);
         }
 
         this.logger.debug(`Player[${ playerName }] joining Table[${ tableName }]!`);

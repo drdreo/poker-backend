@@ -16,7 +16,7 @@ export class Game {
 
     private logger;
 
-    constructor(private smallBlind: number, private bigBlind: number, context?: string) {
+    constructor(context?: string) {
         this.logger = new Logger(context ? context : Game.name);
         this.logger.debug('Started!');
         this.fillDeck();

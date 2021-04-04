@@ -81,7 +81,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     @SubscribeMessage(PlayerEvent.JoinRoom)
-    onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName }): WsResponse<ServerJoined> {
+    onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, config }): WsResponse<ServerJoined> {
         this.logger.debug(`Player[${ playerName }] joining!`);
         let sanitizedRoom = roomName.toLowerCase();
         socket.join(sanitizedRoom);
@@ -121,10 +121,12 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         } else if (playerName) {   // new Player wants to create or join
             this.logger.debug(`New Player[${ playerName }] wants to create[${ sanitizedRoom }]!`);
             try {
-                const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName);
+                console.log(config);
+                const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName, config);
                 newPlayerID = response.playerID;
                 this.sendHomeInfo();
             } catch (e) {
+                console.error(e);
                 this.logger.debug('Couldnt create or join table, join as spectator!');
                 this.onJoinSpectator(socket, { roomName });
                 return { event: PokerEvent.Joined, data: { playerID, table: sanitizedRoom } };

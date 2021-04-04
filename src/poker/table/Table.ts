@@ -2,16 +2,53 @@ import { Logger } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import { Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
-import { GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer } from '../../../shared/src';
+import { GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer, PokerConfig } from '../../../shared/src';
 import { TableConfig } from '../../config/table.config';
 import { Bet } from '../game/Bet';
 import { Game } from '../game/Game';
 import { rankPlayersHands, getHandWinners } from '../game/Hand';
 import { Player } from '../Player';
-import { remapCards, getNextIndex } from '../utils';
+import mergeDeep, { remapCards, getNextIndex } from '../utils';
 import { TableCommand, TableCommandName } from './TableCommand';
 import Timeout = NodeJS.Timeout;
 
+
+interface DefaultConfig extends PokerConfig {
+    afk: {
+        delay: number;
+    };
+    players: {
+        min: number;
+        max: number;
+    };
+}
+
+const defaultConfig: DefaultConfig = {
+    spectatorsAllowed: true,
+    isPublic: true,
+    turn: {
+        time: -1,
+        autoFold: false
+    },
+    chips: 1000,
+    blinds: {
+        small: 10,
+        big: 20,
+        duration: -1 // -1 = fixed, other in ms
+    },
+    music: false,
+    afk: {
+        delay: 30000
+    },
+    players: {
+        min: 2,
+        max: 8
+    },
+    table: {
+        autoClose: true,
+        rebuy: false
+    }
+};
 
 export class Table {
     private playerColors = [
@@ -22,6 +59,7 @@ export class Table {
     ];
 
     players: Player[] = [];
+    pokerConfig: any;
 
     setDealer(player: Player) {
         const dealer = this.dealer;
@@ -29,10 +67,6 @@ export class Table {
             dealer.dealer = false;
         }
         this.players.find(p => p.id === player.id).dealer = true;
-    }
-
-    moveDealer(dealerIndex: number) {
-        this.setDealer(this.players[getNextIndex(dealerIndex, this.players)]);
     }
 
     get dealer(): Player {
@@ -51,28 +85,32 @@ export class Table {
         [key: string]: Timeout;
     } = {};
 
-    constructor(
-        private CONFIG: TableConfig,
-        public smallBlind: number,
-        public bigBlind: number,
-        public minPlayers: number,
-        public maxPlayers: number,
-        public name: string) {
+    constructor(private CONFIG: TableConfig, public name: string, private customConfig?: PokerConfig) {
         this.logger = new Logger(`Table[${ name }]`);
         this.logger.debug(`Created!`);
+
+        this.pokerConfig = this.setConfig();
+        this.logger.debug(this.pokerConfig);
 
         if (this.CONFIG.NEXT_GAME_DELAY < this.CONFIG.END_GAME_DELAY) {
             throw Error('Next game must not be triggered before the end game!');
         }
 
-        //require at least two players to start a game.
-        if (minPlayers < 2) {
+        if (this.pokerConfig.players.min < 2) {
             throw new Error('Parameter [minPlayers] must be a positive integer of a minimum value of 2.');
         }
 
-        if (minPlayers > maxPlayers) {
+        if (this.pokerConfig.players.min > this.pokerConfig.players.max) {
             throw new Error('Parameter [minPlayers] must be less than or equal to [maxPlayers].');
         }
+    }
+
+    private setConfig() {
+        if(this.customConfig){
+            // TODO: VALIDATE customConfig
+            return mergeDeep(defaultConfig, this.customConfig);
+        }
+        return { ...defaultConfig };
     }
 
     public destroy(): void {
@@ -163,7 +201,7 @@ export class Table {
             throw new WsException('Game already started');
         }
 
-        if (this.players.length < this.maxPlayers) {
+        if (this.players.length < this.pokerConfig.players.max) {
             // create and add a new player
             const playerID = uuidv4();
             this.players.push(new Player(playerID, playerName, this.getPlayerColor(), chips));
@@ -194,6 +232,10 @@ export class Table {
         this.sendCurrentPlayer();
         this.sendDealerUpdate();
         this.triggerAFKDetection();
+    }
+
+    moveDealer(dealerIndex: number) {
+        this.setDealer(this.players[getNextIndex(dealerIndex, this.players)]);
     }
 
     private showPlayersCards() {
@@ -353,7 +395,7 @@ export class Table {
 
     newGame() {
 
-        if (this.players.length < this.minPlayers) {
+        if (this.players.length < this.pokerConfig.players.min) {
             throw new WsException('Cant start game. Too less players are in.');
         }
 
@@ -368,7 +410,7 @@ export class Table {
         this.players.map(player => player.reset());
         this.setStartPlayer();
 
-        this.game = new Game(this.smallBlind, this.bigBlind, `Game[${ this.name }]`);
+        this.game = new Game(`Game[${ this.name }]`);
         this.dealCards();
 
         this.sendPotUpdate();
@@ -377,8 +419,8 @@ export class Table {
         this.sendGameStarted();
 
         // auto bet small & big blind
-        this.bet(this.players[this.currentPlayer].id, this.smallBlind, BetType.SmallBlind);
-        this.bet(this.players[this.currentPlayer].id, this.bigBlind, BetType.BigBlind);
+        this.bet(this.players[this.currentPlayer].id, this.pokerConfig.blinds.small, BetType.SmallBlind);
+        this.bet(this.players[this.currentPlayer].id, this.pokerConfig.blinds.big, BetType.BigBlind);
     }
 
     private dealCards() {
@@ -435,7 +477,7 @@ export class Table {
         // Check if bet was at allowed by min raise, but let call bets still proceed
         if (type === BetType.Bet || type === BetType.Raise) {
             const maxBet = this.game.getMaxBet();
-            const minRaise = this.bigBlind; // TODO: Check if min raise is big blind or the current max bet
+            const minRaise = this.pokerConfig.blinds.big; // TODO: Check if min raise is big blind or the current max bet
             if (bet < maxBet + minRaise && bet != player.chips) {
                 throw new WsException('Can not bet less than max bet!');
             }
@@ -784,7 +826,7 @@ export class Table {
     private removePoorPlayers() {
         let dealerIndex;
         this.players = this.players.filter(player => {
-            if (player.chips > this.bigBlind) {
+            if (player.chips > this.pokerConfig.blinds.big) {
                 return true;
             }
             this.logger.verbose(`Removing player[${ player.name }] from the table because chips[${ player.chips }] are not enough.`);
