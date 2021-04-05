@@ -14,7 +14,7 @@ describe('Table', () => {
     const bigBlind = 20;
 
     beforeEach(() => {
-        table = new TableMock({ ...CONFIG.TABLE }, smallBlind, bigBlind, 2, 5, 'TestTable' + counter++);
+        table = new TableMock({ ...CONFIG.TABLE }, 'TestTable' + counter++);
     });
 
     afterEach(async () => {
@@ -48,15 +48,72 @@ describe('Table', () => {
         });
 
         it('should throw a game already full error', () => {
-            table.maxPlayers = 2;
             table.addPlayer('Tester1', 1000);
             table.addPlayer('Tester2', 1000);
+            table.addPlayer('Tester3', 1000);
+            table.addPlayer('Tester4', 1000);
+            table.addPlayer('Tester5', 1000);
+            table.addPlayer('Tester6', 1000);
+            table.addPlayer('Tester7', 1000);
+            table.addPlayer('Tester8', 1000);
             expect(() => {
-                table.addPlayer('Tester3', 1000);
+                table.addPlayer('Tester9', 1000);
             }).toThrow();
         });
     });
 
+    describe('custom config', () => {
+        const config = {
+            'spectatorsAllowed': false,
+            'isPublic': true,
+            'music': false,
+            'chips': 1000,
+            'blinds': {
+                'small': 10,
+                'big': 20
+            },
+            'players': {
+                'max': 8
+            },
+            'table': {
+                'autoClose': true,
+                'rebuy': false
+            }
+        };
+
+        const merged = {
+            "afk": {
+                "delay": 30000
+            },
+            "blinds": {
+                "big": 20,
+                "duration": -1,
+                "small": 10
+            },
+            "chips": 1000,
+            "isPublic": true,
+            "music": false,
+            "players": {
+                "max": 8,
+                "min": 2
+            },
+            "spectatorsAllowed": false,
+            "table": {
+                "autoClose": true,
+                "rebuy": false
+            },
+            "turn": {
+                "autoFold": false,
+                "time": -1
+            }
+        };
+
+        it('should apply custom config', () => {
+            const testTable = new TableMock({ ...CONFIG.TABLE }, 'TestTable' + counter++, config);
+            expect(testTable.pokerConfig).toStrictEqual(merged);
+        });
+
+    });
     describe('newGame', () => {
         beforeEach(() => {
             table.addPlayer('Tester1', 1000);

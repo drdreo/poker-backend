@@ -48,3 +48,12 @@ export default function mergeDeep(target: any, source: any) {
     }
     return output;
 }
+export const iterate = (obj, cb) => {
+    Object.keys(obj).forEach(key => {
+
+        obj[key] = cb(obj[key]);
+        if (typeof obj[key] === 'object') {
+            iterate(obj[key], cb);
+        }
+    });
+};

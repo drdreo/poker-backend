@@ -8,10 +8,10 @@ import { Bet } from '../game/Bet';
 import { Game } from '../game/Game';
 import { rankPlayersHands, getHandWinners } from '../game/Hand';
 import { Player } from '../Player';
-import mergeDeep, { remapCards, getNextIndex } from '../utils';
+import mergeDeep, { remapCards, getNextIndex, iterate } from '../utils';
+import { validateConfig, InvalidConfigError, TableFullError, GameStartedError } from './table.utils';
 import { TableCommand, TableCommandName } from './TableCommand';
 import Timeout = NodeJS.Timeout;
-
 
 interface DefaultConfig extends PokerConfig {
     afk: {
@@ -49,6 +49,7 @@ const defaultConfig: DefaultConfig = {
         rebuy: false
     }
 };
+
 
 export class Table {
     private playerColors = [
@@ -89,7 +90,11 @@ export class Table {
         this.logger = new Logger(`Table[${ name }]`);
         this.logger.debug(`Created!`);
 
-        this.pokerConfig = this.setConfig();
+
+        this.logger.debug(this.customConfig);
+
+        this.setConfig();
+
         this.logger.debug(this.pokerConfig);
 
         if (this.CONFIG.NEXT_GAME_DELAY < this.CONFIG.END_GAME_DELAY) {
@@ -105,12 +110,25 @@ export class Table {
         }
     }
 
-    private setConfig() {
-        if(this.customConfig){
-            // TODO: VALIDATE customConfig
-            return mergeDeep(defaultConfig, this.customConfig);
+    private setConfig(): void {
+        this.pokerConfig = { ...defaultConfig };
+
+        if (this.customConfig) {
+            this.pokerConfig = mergeDeep(defaultConfig, this.customConfig);
+            const valid = validateConfig(this.pokerConfig);
+            if (!valid) {
+                this.logger.error('Invalid config provided!');
+                throw new InvalidConfigError('Invalid config provided!');
+            }
         }
-        return { ...defaultConfig };
+
+        // convert each string to number, "20" -> 20
+        iterate(this.pokerConfig, (val) => {
+            if (!isNaN(parseInt(val))) {
+                return +val;
+            }
+            return val;
+        });
     }
 
     public destroy(): void {
@@ -196,18 +214,19 @@ export class Table {
         });
     }
 
-    public addPlayer(playerName: string, chips: number): string {
+    public addPlayer(playerName: string, chips?: number): string {
         if (this.game) {
-            throw new WsException('Game already started');
+            throw new GameStartedError('Game already started');
         }
 
         if (this.players.length < this.pokerConfig.players.max) {
             // create and add a new player
             const playerID = uuidv4();
+            chips = chips ? chips : this.pokerConfig.chips;
             this.players.push(new Player(playerID, playerName, this.getPlayerColor(), chips));
             return playerID;
         } else {
-            throw new WsException('Table is already full!');
+            throw new TableFullError('Table is already full!');
         }
     }
 
@@ -575,7 +594,7 @@ export class Table {
         if (wasDealer) {
             this.moveDealer(kickedPlayerIndex);
         }
-        this.players = this.players.filter(player => player.id != kickPlayer.id);
+        this.removePlayer(kickPlayer);
 
         // clean up bets as well, TODO: check sidepots
         this.game.removeBet(kickedPlayerIndex);
@@ -829,7 +848,7 @@ export class Table {
             if (player.chips > this.pokerConfig.blinds.big) {
                 return true;
             }
-            this.logger.verbose(`Removing player[${ player.name }] from the table because chips[${ player.chips }] are not enough.`);
+            this.logger.verbose(`Removing player[${ player.name }] from the table because chips[${ player.chips }] are not enough[${ this.pokerConfig.blinds.big }].`);
             if (player.dealer) {
                 dealerIndex = this.getPlayerIndexByID(player.id);
             }
@@ -885,5 +904,9 @@ export class Table {
         if (id in this.timeoutHandler) {
             clearTimeout(this.timeoutHandler[id]);
         }
+    }
+
+    removePlayer(player: Player) {
+        this.players = this.players.filter(p => p.id !== player.id);
     }
 }

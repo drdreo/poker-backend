@@ -27,7 +27,7 @@ export class PokerController {
     getTable(@Param('name') name): TableResponse {
         const table = this.tableService.getTable(name);
         if (table) {
-            return { name: table.name, startTime: table.startTime, players: table.getPlayersPreview() };
+            return { name: table.name, startTime: table.startTime, players: table.getPlayersPreview(), spectatorsAllowed: table.pokerConfig.spectatorsAllowed };
         }
 
         throw new HttpException('Table does not exist!', HttpStatus.NOT_FOUND);
