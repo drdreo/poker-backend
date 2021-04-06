@@ -2,11 +2,9 @@ import { Game } from './Game';
 
 describe('Game', () => {
     let game: Game;
-    const smallBlind = 10;
-    const bigBlind = 20;
 
     beforeEach(() => {
-        game = new Game(smallBlind, bigBlind, 'TestGame');
+        game = new Game('TestGame');
     });
 
     it('should not have a board', () => {

@@ -1,6 +1,7 @@
-import { Logger, UseInterceptors } from '@nestjs/common';
+import { Logger, UseInterceptors, HttpStatus } from '@nestjs/common';
 import {
-    ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer, WsResponse
+    ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer, WsResponse,
+    WsException
 } from '@nestjs/websockets';
 import { Client, Server, Socket } from 'socket.io';
 import {
@@ -10,6 +11,7 @@ import {
 import { SentryInterceptor } from '../sentry.interceptor';
 import { Player } from './Player';
 import { TableService } from './table/table.service';
+import { InvalidConfigError, GameStartedError, TableFullError } from './table/table.utils';
 import { TableCommand, TableCommandName } from './table/TableCommand';
 import { remapCards } from './utils';
 
@@ -80,8 +82,15 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
     }
 
+    // to prevent sockets from still receiving game messages. Leaves the table and unsets all socket data
+    private disconnectSocket(socket: any, table: string) {
+        socket.leave(table);
+        socket['table'] = undefined;
+        socket['playerID'] = null;
+    }
+
     @SubscribeMessage(PlayerEvent.JoinRoom)
-    onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName }): WsResponse<ServerJoined> {
+    onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, config }): WsResponse<ServerJoined> {
         this.logger.debug(`Player[${ playerName }] joining!`);
         let sanitizedRoom = roomName.toLowerCase();
         socket.join(sanitizedRoom);
@@ -119,15 +128,30 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             this.sendTo(socket.id, PokerEvent.GameStatus, gameStatus);
 
         } else if (playerName) {   // new Player wants to create or join
-            this.logger.debug(`New Player[${ playerName }] wants to create[${ sanitizedRoom }]!`);
+            this.logger.debug(`New Player[${ playerName }] wants to create or join [${ sanitizedRoom }]!`);
             try {
-                const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName);
+                const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName, config);
                 newPlayerID = response.playerID;
                 this.sendHomeInfo();
             } catch (e) {
-                this.logger.debug('Couldnt create or join table, join as spectator!');
-                this.onJoinSpectator(socket, { roomName });
-                return { event: PokerEvent.Joined, data: { playerID, table: sanitizedRoom } };
+                if (e instanceof InvalidConfigError) {
+                    throw new WsException('Invalid config provided!');
+                }
+
+                const table = this.tableService.getTable(sanitizedRoom);
+                if (e instanceof GameStartedError || e instanceof TableFullError) {
+                    if (table && table.pokerConfig.spectatorsAllowed) {
+                        this.logger.debug('Couldnt create or join table, join as spectator!');
+                        this.onJoinSpectator(socket, { roomName });
+                        return { event: PokerEvent.Joined, data: { playerID, table: sanitizedRoom } };
+                    } else {
+                        this.logger.debug('Couldnt create or join table, but spectating is not allowed!');
+                        this.disconnectSocket(socket, sanitizedRoom);
+                        throw new WsException('Spectating is not allowed!');
+                    }
+                } else {
+                    console.error(e);
+                }
             }
 
         } else {
@@ -151,7 +175,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         this.logger.debug(`Spectator trying to join table[${ sanitizedRoom }]!`);
         const table = this.tableService.getTable(sanitizedRoom);
-        if (table) {
+        if (table && table.pokerConfig.spectatorsAllowed) {
             socket.join(sanitizedRoom);
             socket['table'] = sanitizedRoom;
 
@@ -164,8 +188,10 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 table.sendPotUpdate();
                 table.sendMaxBetUpdate();
             }
+            return { event: PokerEvent.Joined, data: { table: sanitizedRoom } };
+        } else {
+            throw new WsException('Spectating is not allowed!');
         }
-        return { event: PokerEvent.Joined, data: { table: sanitizedRoom } };
     }
 
     @SubscribeMessage(PlayerEvent.StartGame)

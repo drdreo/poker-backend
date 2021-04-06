@@ -16,7 +16,7 @@ export class Game {
 
     private logger;
 
-    constructor(private smallBlind: number, private bigBlind: number, context?: string) {
+    constructor(context?: string) {
         this.logger = new Logger(context ? context : Game.name);
         this.logger.debug('Started!');
         this.fillDeck();
@@ -50,6 +50,10 @@ export class Game {
 
     hasBet(playerIndex: number): boolean {
         return !!this.round.bets[playerIndex];
+    }
+
+    removeBet(playerIndex: number): void {
+        this.bet(playerIndex, new Bet(0, BetType.Removed));
     }
 
     // Returns the index of the player with the last bet or undefined

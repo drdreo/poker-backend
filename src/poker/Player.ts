@@ -6,6 +6,7 @@ export class Player {
     cards: string[] = [];
     hand: SolvedHand | null;
     bet: Bet | null = null;
+    dealer = false;
     folded = false;
     allIn = false;
     hasSidePot = false;

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WsException } from '@nestjs/websockets';
+import { PokerConfig, GameStatus } from '@shared/src';
 import { Subject } from 'rxjs';
 import { Config } from '../../config/configuration';
 import { TableConfig } from '../../config/table.config';
@@ -31,8 +32,8 @@ export class TableService {
         this._tableCommands$.next(command);
     }
 
-    createTable(name: string): Table {
-        const table = new Table(this.CONFIG, 10, 20, 2, 8, name);
+    createTable(name: string, config?: PokerConfig): Table {
+        const table = new Table(this.CONFIG, name, config);
         table.commands$ = this._tableCommands$;
         this.tables.push(table);
         return table;
@@ -49,9 +50,11 @@ export class TableService {
     }
 
     getAllTables() {
-        return this.tables.map(table => {
-            return { name: table.name, started: table.hasGame() };
-        });
+        return this.tables
+                   .filter(table => table.pokerConfig.isPublic)
+                   .map(table => {
+                       return { name: table.name, started: table.hasGame() };
+                   });
     }
 
     getPlayersCount() {
@@ -62,7 +65,12 @@ export class TableService {
         for (const table of this.tables) {
             const player = table.getPlayer(playerID);
             if (player) {
-                player.disconnected = true;
+                // if the game didnt start yet, just remove the player
+                if (table.getGameStatus() === GameStatus.Waiting) {
+                    table.removePlayer(player);
+                } else {
+                    player.disconnected = true;
+                }
                 // if every player disconnected, remove the table after some time
                 if (this.destroyTimeout) {
                     clearTimeout(this.destroyTimeout);
@@ -95,17 +103,17 @@ export class TableService {
      *
      * @returns the new players ID
      */
-    createOrJoinTable(tableName: string, playerName: string): { playerID: string } {
+    createOrJoinTable(tableName: string, playerName: string, config?: PokerConfig): { playerID: string } {
         let table = this.getTable(tableName);
 
         if (!table) {
             this.logger.debug(`Player[${ playerName }] created a table!`);
-            table = this.createTable(tableName);
+            table = this.createTable(tableName, config);
         }
 
         this.logger.debug(`Player[${ playerName }] joining Table[${ tableName }]!`);
 
-        const playerID = table.addPlayer(playerName, 1000);
+        const playerID = table.addPlayer(playerName);
 
         return { playerID };
     }

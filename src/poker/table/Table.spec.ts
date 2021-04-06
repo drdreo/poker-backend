@@ -1,5 +1,6 @@
 import { RoundType } from '../../../shared/src';
 import { testConfig } from '../../config/configuration.test';
+import { Player } from '../Player';
 import { TableMock } from './Table.mock';
 import { TableCommandName } from './TableCommand';
 
@@ -13,7 +14,7 @@ describe('Table', () => {
     const bigBlind = 20;
 
     beforeEach(() => {
-        table = new TableMock({ ...CONFIG.TABLE }, smallBlind, bigBlind, 2, 5, 'TestTable' + counter++);
+        table = new TableMock({ ...CONFIG.TABLE }, 'TestTable' + counter++);
     });
 
     afterEach(async () => {
@@ -47,15 +48,72 @@ describe('Table', () => {
         });
 
         it('should throw a game already full error', () => {
-            table.maxPlayers = 2;
             table.addPlayer('Tester1', 1000);
             table.addPlayer('Tester2', 1000);
+            table.addPlayer('Tester3', 1000);
+            table.addPlayer('Tester4', 1000);
+            table.addPlayer('Tester5', 1000);
+            table.addPlayer('Tester6', 1000);
+            table.addPlayer('Tester7', 1000);
+            table.addPlayer('Tester8', 1000);
             expect(() => {
-                table.addPlayer('Tester3', 1000);
+                table.addPlayer('Tester9', 1000);
             }).toThrow();
         });
     });
 
+    describe('custom config', () => {
+        const config = {
+            'spectatorsAllowed': false,
+            'isPublic': true,
+            'music': false,
+            'chips': 1000,
+            'blinds': {
+                'small': 10,
+                'big': 20
+            },
+            'players': {
+                'max': 8
+            },
+            'table': {
+                'autoClose': true,
+                'rebuy': false
+            }
+        };
+
+        const merged = {
+            "afk": {
+                "delay": 30000
+            },
+            "blinds": {
+                "big": 20,
+                "duration": -1,
+                "small": 10
+            },
+            "chips": 1000,
+            "isPublic": true,
+            "music": false,
+            "players": {
+                "max": 8,
+                "min": 2
+            },
+            "spectatorsAllowed": false,
+            "table": {
+                "autoClose": true,
+                "rebuy": false
+            },
+            "turn": {
+                "autoFold": false,
+                "time": -1
+            }
+        };
+
+        it('should apply custom config', () => {
+            const testTable = new TableMock({ ...CONFIG.TABLE }, 'TestTable' + counter++, config);
+            expect(testTable.pokerConfig).toStrictEqual(merged);
+        });
+
+    });
     describe('newGame', () => {
         beforeEach(() => {
             table.addPlayer('Tester1', 1000);
@@ -116,16 +174,16 @@ describe('Table', () => {
             const player1Idx = table.getPlayerIndexByID(player1);
             const player2Idx = table.getPlayerIndexByID(player2);
             expect(player1Idx).not.toBe(table.currentPlayer);
-            expect(player2Idx).toBe(table.dealer);
+            expect(player2).toBe(table.dealer.id);
             expect(player2Idx).toBe(table.currentPlayer);
         });
     });
 
     describe('Game Mechanics (3 players)', () => {
 
-        let player1;
-        let player2;
-        let player3;
+        let player1: string;
+        let player2: string;
+        let player3: string;
 
         beforeEach(() => {
             player1 = table.addPlayer('Tester1', 1000);
@@ -153,7 +211,7 @@ describe('Table', () => {
 
             it('should set last player as dealer', () => {
                 const player3Idx = table.getPlayerIndexByID(player3);
-                expect(player3Idx).toBe(table.dealer);
+                expect(player3).toBe(table.dealer.id);
                 expect(player3Idx).toBe(table.currentPlayer); // current player should be 3rd player, 1 and 2 are blinds
             });
 
@@ -737,7 +795,8 @@ describe('Table', () => {
                 // rig the test player cards and the board
                 table.getPlayer(player1).cards = ['AD', 'AS'];
                 table.getPlayer(player3).cards = ['2D', '9C'];
-                table.getGame().deck = table.getGame().deck.filter(card => card !== 'AD' && card !== 'AS' && card !== '2D' && card !=='9C');
+                table.getGame().deck = table.getGame().deck
+                                            .filter(card => card !== 'AD' && card !== 'AS' && card !== '2D' && card !== '9C');
 
 
                 table.bet(player3, table.getPlayer(player3).chips); // all in
@@ -914,6 +973,122 @@ describe('Table', () => {
 
         test.todo('should kick player from table if no chips left');
         test.todo('should kick all-in player after lose');
+
+        describe('AFK', () => {
+            let kickPlayer: Player;
+
+            beforeEach(() => {
+                kickPlayer = table.getPlayer(player2);
+                kickPlayer.afk = true;
+            });
+
+            it('should kick an afk player', () => {
+                table.voteKick(player1, player2);
+                expect(kickPlayer.kickVotes.size).toBe(1);
+            });
+
+            it('should not kick an active player', () => {
+                kickPlayer.afk = false;
+                table.voteKick(player1, player2);
+                expect(table.getPlayer(player2).afk).toBe(false);
+                expect(table.getPlayer(player2).kickVotes.size).toBe(0);
+            });
+
+            it('should not kick yourself', () => {
+                expect(() => {
+                    table.voteKick(player2, player2);
+                }).toThrow();
+
+                expect(kickPlayer.kickVotes.size).toBe(0);
+            });
+
+            it('should not kick a player with < 50% votes', () => {
+                table.voteKick(player1, player2);
+                expect(kickPlayer.kickVotes.size).toBe(1);
+                expect(table.players.length).toBe(3);
+            });
+
+            it('should kick a player with > 50% votes', () => {
+                table.voteKick(player1, player2);
+                table.voteKick(player3, player2);
+                expect(kickPlayer.kickVotes.size).toBe(2);
+                expect(table.players.length).toBe(2);
+            });
+
+            it('should not kick a player who returned from afk', () => {
+                kickPlayer = table.getPlayer(player3);
+                kickPlayer.afk = true;
+                table.voteKick(player1, player3);
+                table.call(player3);
+                table.voteKick(player2, player3);
+                expect(kickPlayer.afk).toBe(false);
+                expect(kickPlayer.kickVotes.size).toBe(0);
+                expect(table.players.length).toBe(3);
+            });
+
+            it('should kick first player and have same current player', () => {
+                kickPlayer = table.getPlayer(player1);
+                kickPlayer.afk = true;
+
+                expect(table.getCurrentPlayer().id).toBe(player3);
+
+                table.voteKick(player2, player1);
+                table.voteKick(player3, player1);
+
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player3);
+            });
+
+            it('should kick player in the middle and set next player', () => {
+                table.voteKick(player1, player2);
+                table.voteKick(player3, player2);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player3);
+            });
+
+            it('should kick last player and set first player as next', () => {
+                kickPlayer = table.getPlayer(player3);
+                kickPlayer.afk = true;
+                table.voteKick(player1, player3);
+                table.voteKick(player2, player3);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player1);
+            });
+
+            it('should kick first player (current) and set next player', () => {
+                kickPlayer = table.getPlayer(player1);
+                kickPlayer.afk = true;
+
+                table.call(player3);
+                table.voteKick(player2, player1);
+                table.voteKick(player3, player1);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player2);
+            });
+
+            it('should kick first player (current) and set next player', () => {
+                table.call(player3);
+                table.call(player1);
+                table.voteKick(player1, player2);
+                table.voteKick(player3, player2);
+                expect(table.players.length).toBe(2);
+                expect(table.getCurrentPlayer().id).toBe(player3);
+            });
+
+            it('should exclude the kicked players bet from the pot', () => {
+                table.bet(player3, 100);
+                table.bet(player1, 200);
+                table.call(player2);
+
+                kickPlayer = table.getPlayer(player3);
+                kickPlayer.afk = true;
+
+                table.voteKick(player1, player3);
+                table.voteKick(player2, player3);
+                expect(table.players.length).toBe(2);
+                expect(table.getGame().pot).toBe(400);
+            });
+        });
     });
 
     describe('Game Mechanics (5+ players)', () => {

@@ -2,15 +2,53 @@ import { Logger } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import { Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
-import { GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer } from '../../../shared/src';
+import { GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer, PokerConfig } from '../../../shared/src';
 import { TableConfig } from '../../config/table.config';
 import { Bet } from '../game/Bet';
 import { Game } from '../game/Game';
 import { rankPlayersHands, getHandWinners } from '../game/Hand';
 import { Player } from '../Player';
-import { remapCards, getNextIndex } from '../utils';
+import mergeDeep, { remapCards, getNextIndex, iterate } from '../utils';
+import { validateConfig, InvalidConfigError, TableFullError, GameStartedError } from './table.utils';
 import { TableCommand, TableCommandName } from './TableCommand';
 import Timeout = NodeJS.Timeout;
+
+interface DefaultConfig extends PokerConfig {
+    afk: {
+        delay: number;
+    };
+    players: {
+        min: number;
+        max: number;
+    };
+}
+
+const defaultConfig: DefaultConfig = {
+    spectatorsAllowed: true,
+    isPublic: true,
+    turn: {
+        time: -1,
+        autoFold: false
+    },
+    chips: 1000,
+    blinds: {
+        small: 10,
+        big: 20,
+        duration: -1 // -1 = fixed, other in ms
+    },
+    music: false,
+    afk: {
+        delay: 30000
+    },
+    players: {
+        min: 2,
+        max: 8
+    },
+    table: {
+        autoClose: true,
+        rebuy: false
+    }
+};
 
 
 export class Table {
@@ -22,7 +60,20 @@ export class Table {
     ];
 
     players: Player[] = [];
-    dealer: number;	// index of the current dealer
+    pokerConfig: any;
+
+    setDealer(player: Player) {
+        const dealer = this.dealer;
+        if (dealer) {
+            dealer.dealer = false;
+        }
+        this.players.find(p => p.id === player.id).dealer = true;
+    }
+
+    get dealer(): Player {
+        return this.players.find(player => player.dealer);
+    }
+
     currentPlayer: number; // index of the current player
     private game: Game | undefined;
 
@@ -35,28 +86,49 @@ export class Table {
         [key: string]: Timeout;
     } = {};
 
-    constructor(
-        private CONFIG: TableConfig,
-        public smallBlind: number,
-        public bigBlind: number,
-        public minPlayers: number,
-        public maxPlayers: number,
-        public name: string) {
+    constructor(private CONFIG: TableConfig, public name: string, private customConfig?: PokerConfig) {
         this.logger = new Logger(`Table[${ name }]`);
         this.logger.debug(`Created!`);
+
+
+        this.logger.debug(this.customConfig);
+
+        this.setConfig();
+
+        this.logger.debug(this.pokerConfig);
 
         if (this.CONFIG.NEXT_GAME_DELAY < this.CONFIG.END_GAME_DELAY) {
             throw Error('Next game must not be triggered before the end game!');
         }
 
-        //require at least two players to start a game.
-        if (minPlayers < 2) {
+        if (this.pokerConfig.players.min < 2) {
             throw new Error('Parameter [minPlayers] must be a positive integer of a minimum value of 2.');
         }
 
-        if (minPlayers > maxPlayers) {
+        if (this.pokerConfig.players.min > this.pokerConfig.players.max) {
             throw new Error('Parameter [minPlayers] must be less than or equal to [maxPlayers].');
         }
+    }
+
+    private setConfig(): void {
+        this.pokerConfig = { ...defaultConfig };
+
+        if (this.customConfig) {
+            this.pokerConfig = mergeDeep(defaultConfig, this.customConfig);
+            const valid = validateConfig(this.pokerConfig);
+            if (!valid) {
+                this.logger.error('Invalid config provided!');
+                throw new InvalidConfigError('Invalid config provided!');
+            }
+        }
+
+        // convert each string to number, "20" -> 20
+        iterate(this.pokerConfig, (val) => {
+            if (!isNaN(parseInt(val))) {
+                return +val;
+            }
+            return val;
+        });
     }
 
     public destroy(): void {
@@ -94,6 +166,14 @@ export class Table {
 
     public isPlayer(playerID: string): boolean {
         return this.players.some(player => player.id === playerID);
+    }
+
+    private isCurrentPlayer(playerID: string) {
+        return this.getCurrentPlayer().id === playerID;
+    }
+
+    public getCurrentPlayer(): Player {
+        return this.players[this.currentPlayer];
     }
 
     private getPlayerColor(): string {
@@ -134,18 +214,19 @@ export class Table {
         });
     }
 
-    public addPlayer(playerName: string, chips: number): string {
+    public addPlayer(playerName: string, chips?: number): string {
         if (this.game) {
-            throw new WsException('Game already started');
+            throw new GameStartedError('Game already started');
         }
 
-        if (this.players.length < this.maxPlayers) {
+        if (this.players.length < this.pokerConfig.players.max) {
             // create and add a new player
             const playerID = uuidv4();
+            chips = chips ? chips : this.pokerConfig.chips;
             this.players.push(new Player(playerID, playerName, this.getPlayerColor(), chips));
             return playerID;
         } else {
-            throw new WsException('Table is already full!');
+            throw new TableFullError('Table is already full!');
         }
     }
 
@@ -157,16 +238,23 @@ export class Table {
         // just hardcoded dealer is always last and small blind is first
         // check if dealer was set already, so move it further instead
         if (this.dealer) {
-            this.dealer = getNextIndex(this.dealer, this.players);
-            this.currentPlayer = headsUp ? this.dealer : getNextIndex(this.dealer, this.players);
+            let dealerIndex = this.getPlayerIndexByID(this.dealer.id);
+            this.moveDealer(dealerIndex);
+            dealerIndex = this.getPlayerIndexByID(this.dealer.id);
+            this.currentPlayer = headsUp ? dealerIndex : getNextIndex(dealerIndex, this.players);
         } else {
-            this.dealer = this.players.length - 1;
-            this.currentPlayer = headsUp ? this.dealer : 0;
+            this.setDealer(this.players[this.players.length - 1]);
+            const dealerIndex = this.getPlayerIndexByID(this.dealer.id);
+            this.currentPlayer = headsUp ? dealerIndex : 0;
         }
 
         this.sendCurrentPlayer();
         this.sendDealerUpdate();
         this.triggerAFKDetection();
+    }
+
+    moveDealer(dealerIndex: number) {
+        this.setDealer(this.players[getNextIndex(dealerIndex, this.players)]);
     }
 
     private showPlayersCards() {
@@ -203,7 +291,7 @@ export class Table {
             }
 
             // if last player, continue with first
-            this.currentPlayer = this.currentPlayer === this.players.length - 1 ? 0 : this.currentPlayer + 1;
+            this.currentPlayer = this.currentPlayer >= this.players.length - 1 ? 0 : this.currentPlayer + 1;
         } while (this.players[this.currentPlayer].folded || this.players[this.currentPlayer].allIn);
 
         if (sendUpdate) {
@@ -312,7 +400,7 @@ export class Table {
         this.commands$.next({
             name: TableCommandName.Dealer,
             table: this.name,
-            data: { dealerPlayerID: this.players[this.dealer].id }
+            data: { dealerPlayerID: this.dealer.id }
         });
     }
 
@@ -326,7 +414,7 @@ export class Table {
 
     newGame() {
 
-        if (this.players.length < this.minPlayers) {
+        if (this.players.length < this.pokerConfig.players.min) {
             throw new WsException('Cant start game. Too less players are in.');
         }
 
@@ -334,14 +422,21 @@ export class Table {
 
         // check if we removed everyone but the winner due to money issue
         if (this.players.length === 1) {
-            this.sendTableClosed();
+            if (this.pokerConfig.table.autoClose) {
+                this.sendTableClosed();
+            } else {
+                // make game restartable
+                this.game = null;
+                this.sendGameStatusUpdate();
+            }
+
             return;
         }
 
         this.players.map(player => player.reset());
         this.setStartPlayer();
 
-        this.game = new Game(this.smallBlind, this.bigBlind, `Game[${ this.name }]`);
+        this.game = new Game(`Game[${ this.name }]`);
         this.dealCards();
 
         this.sendPotUpdate();
@@ -350,8 +445,8 @@ export class Table {
         this.sendGameStarted();
 
         // auto bet small & big blind
-        this.bet(this.players[this.currentPlayer].id, this.smallBlind, BetType.SmallBlind);
-        this.bet(this.players[this.currentPlayer].id, this.bigBlind, BetType.BigBlind);
+        this.bet(this.players[this.currentPlayer].id, this.pokerConfig.blinds.small, BetType.SmallBlind);
+        this.bet(this.players[this.currentPlayer].id, this.pokerConfig.blinds.big, BetType.BigBlind);
     }
 
     private dealCards() {
@@ -403,12 +498,12 @@ export class Table {
         }
 
         const player = this.players[playerIndex];
-        this.logger.debug(`Player[${ player.name }] bet[${ type }]][${ bet }]!`);
+        this.logger.debug(`Player[${ player.name }] bet[${ type }][${ bet }]!`);
 
         // Check if bet was at allowed by min raise, but let call bets still proceed
         if (type === BetType.Bet || type === BetType.Raise) {
             const maxBet = this.game.getMaxBet();
-            const minRaise = this.bigBlind; // TODO: Check if min raise is big blind or the current max bet
+            const minRaise = this.pokerConfig.blinds.big; // TODO: Check if min raise is big blind or the current max bet
             if (bet < maxBet + minRaise && bet != player.chips) {
                 throw new WsException('Can not bet less than max bet!');
             }
@@ -480,17 +575,54 @@ export class Table {
 
 
     voteKick(playerID: string, kickPlayerID: string) {
-        const votesNeeded = Math.round(this.players.length / 2);
-        const player = this.getPlayer(kickPlayerID);
-        if (player.afk) {
-            player.kickVotes.add(playerID);
-            if (player.kickVotes.size >= votesNeeded) {
-                this.sendPlayerKicked(player.name);
+        if (playerID === kickPlayerID) {
+            throw new WsException('Stop kicking yourself!');
+        }
+
+        const votesNeeded = Math.max(Math.round(this.players.length / 2), 2);
+        const kickPlayer = this.getPlayer(kickPlayerID);
+        if (kickPlayer.afk) {
+            kickPlayer.kickVotes.add(playerID);
+            if (kickPlayer.kickVotes.size >= votesNeeded) {
+                this.kickPlayer(kickPlayer);
             }
         } else {
             this.logger.warn('Can not kick player who is not AFK!');
         }
 
+    }
+
+    private kickPlayer(kickPlayer: Player) {
+        this.sendPlayerKicked(kickPlayer.name);
+        const wasCurrentPlayer = this.isCurrentPlayer(kickPlayer.id);
+        const wasLastPlayer = this.currentPlayer === this.players.length - 1;
+        const wasDealer = kickPlayer.id === this.dealer.id;
+        const kickedPlayerIndex = this.getPlayerIndexByID(kickPlayer.id);
+        if (wasDealer) {
+            this.moveDealer(kickedPlayerIndex);
+        }
+        this.removePlayer(kickPlayer);
+
+        // clean up bets as well, TODO: check sidepots
+        this.game.removeBet(kickedPlayerIndex);
+
+        const next = this.progress(false);
+        if (next) {
+            if (wasCurrentPlayer) {
+                // rewrite current player so it works with nextPlayer() , first --> last, others --> previous
+                if (this.currentPlayer === 0) {
+                    this.currentPlayer = this.players.length - 1;
+                } else {
+                    this.currentPlayer = this.currentPlayer - 1;
+                }
+                this.nextPlayer();
+            } else if (wasLastPlayer) {
+                this.logger.warn('kickPlayer wasn\'t  triggered on the current player!');
+                this.currentPlayer = this.currentPlayer - 1;
+            }
+        }
+
+        this.sendPlayersUpdate();
     }
 
     private isEndOfRound(): boolean {
@@ -527,9 +659,11 @@ export class Table {
         return this.game.round.type;
     }
 
-    private progress(): boolean {
+    private progress(action = true): boolean {
         // every action ends up here, so check if the player returned from AFK
-        this.unmarkPlayerAFK(this.currentPlayer);
+        if (action) {
+            this.unmarkPlayerAFK(this.currentPlayer);
+        }
 
         const everyoneElseFolded = this.hasEveryoneElseFolded();
 
@@ -541,7 +675,7 @@ export class Table {
 
             // all players all in or all except one is all in
             const allInPlayers = this.players.filter(player => player.allIn);
-            if (allInPlayers.length != 0 && allInPlayers.length >= this.getActivePlayers().length - 1) { // TODO: HEADS UP is des voisch wenn wer folded
+            if (!everyoneElseFolded && allInPlayers.length != 0 && allInPlayers.length >= this.getActivePlayers().length - 1) {
                 this.logger.debug('All in situation, auto-play game');
                 this.showPlayersCards();
 
@@ -583,13 +717,12 @@ export class Table {
             this.nextRound(round);
             this.sendGameRoundUpdate();
             // End of Round: always let player after dealer start, so set it to the dealer
-            this.currentPlayer = this.dealer;
+            this.currentPlayer = this.getPlayerIndexByID(this.dealer.id);
         }
         return true;
     }
 
     private processBets(everyoneElseFolded = false) {
-        // let activePlayers = this.players.filter(player => player.bet > 0);
         let activePlayers = this.players.filter(player => player.bet?.amount > 0 || !player.folded && player.allIn && !player.hasSidePot);
         const allInPlayers = activePlayers.filter(player => player.allIn);
 
@@ -717,14 +850,21 @@ export class Table {
     }
 
     private removePoorPlayers() {
+        let dealerIndex;
         this.players = this.players.filter(player => {
-            if (player.chips > this.bigBlind) {
+            if (player.chips > this.pokerConfig.blinds.big) {
                 return true;
             }
-            this.logger.verbose(`Removing player[${ player.name }] from the table because chips[${ player.chips }] are not enough.`);
+            this.logger.verbose(`Removing player[${ player.name }] from the table because chips[${ player.chips }] are not enough[${ this.pokerConfig.blinds.big }].`);
+            if (player.dealer) {
+                dealerIndex = this.getPlayerIndexByID(player.id);
+            }
             return false;
         });
 
+        if (dealerIndex) {
+            this.moveDealer(dealerIndex);
+        }
         this.sendPlayersUpdate();
     }
 
@@ -771,5 +911,9 @@ export class Table {
         if (id in this.timeoutHandler) {
             clearTimeout(this.timeoutHandler[id]);
         }
+    }
+
+    removePlayer(player: Player) {
+        this.players = this.players.filter(p => p.id !== player.id);
     }
 }
