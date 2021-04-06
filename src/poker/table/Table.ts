@@ -422,7 +422,14 @@ export class Table {
 
         // check if we removed everyone but the winner due to money issue
         if (this.players.length === 1) {
-            this.sendTableClosed();
+            if (this.pokerConfig.table.autoClose) {
+                this.sendTableClosed();
+            } else {
+                // make game restartable
+                this.game = null;
+                this.sendGameStatusUpdate();
+            }
+
             return;
         }
 
@@ -668,7 +675,7 @@ export class Table {
 
             // all players all in or all except one is all in
             const allInPlayers = this.players.filter(player => player.allIn);
-            if (allInPlayers.length != 0 && allInPlayers.length >= this.getActivePlayers().length - 1) { // TODO: HEADS UP is des voisch wenn wer folded
+            if (!everyoneElseFolded && allInPlayers.length != 0 && allInPlayers.length >= this.getActivePlayers().length - 1) {
                 this.logger.debug('All in situation, auto-play game');
                 this.showPlayersCards();
 
