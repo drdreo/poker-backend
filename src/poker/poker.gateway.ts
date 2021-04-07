@@ -196,18 +196,23 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     @SubscribeMessage(PlayerEvent.StartGame)
     onStartGame(@ConnectedSocket() socket: Socket) {
-        this.tableService.startGame(socket['table']);
+        const table = socket['table'];
+        this.tableService.startGame(table);
         this.sendHomeInfo();
     }
 
     @SubscribeMessage(PlayerEvent.Leave)
     onPlayerLeave(@ConnectedSocket() socket: Socket) {
-        this.handlePlayerDisconnect(socket['playerID'], socket['table']);
+        const playerID = socket['playerID'];
+        const table = socket['table'];
+        this.handlePlayerDisconnect(playerID, table);
     }
 
     @SubscribeMessage(PlayerEvent.VoteKick)
     onVoteKick(@ConnectedSocket() socket: Socket, @MessageBody() { kickPlayerID }) {
-        this.tableService.voteKick(socket['table'], socket['playerID'], kickPlayerID);
+        const playerID = socket['playerID'];
+        const table = socket['table'];
+        this.tableService.voteKick(table, playerID, kickPlayerID);
     }
 
     /**
