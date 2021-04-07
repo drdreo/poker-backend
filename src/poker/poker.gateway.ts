@@ -247,7 +247,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const playerID = socket['playerID'];
         const table = socket['table'];
         this.tableService.fold(table, playerID);
-        this.sendTo(table, PokerEvent.PlayerFolded, { playerID } as PlayerFolded);
     }
 
 
@@ -280,6 +279,11 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             }
                 break;
 
+            case TableCommandName.PlayerFolded: {
+                const response: PlayerFolded = { playerID: data.playerID };
+                this.sendTo(table, PokerEvent.PlayerFolded, response);
+            }
+                break;
 
             case TableCommandName.PlayersCards: {
                 const response: GamePlayersUpdate = { players: data.players };
