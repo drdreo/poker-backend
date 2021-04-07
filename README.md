@@ -1,19 +1,15 @@
 
 <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo_text.svg" width="320" alt="Nest Logo" /></a>
 
-
-<a href="https://angular.io/" target="blank"><img src="https://angular.io/assets/images/logos/angular/angular.svg" alt="angular-logo" width="120px" height="120px"/></a>
- 
 [![Build Status](https://travis-ci.com/drdreo/poker.svg?branch=master)](https://travis-ci.com/drdreo/poker)
 [![Netlify Status](https://api.netlify.com/api/v1/badges/ba84f3f4-6438-4553-83e3-f9e8198dd9a1/deploy-status)](https://app.netlify.com/sites/pokern/deploys) 
 
 
 Live app at netlify: https://pokern.netlify.app
 
-# Pokern
+# Poker-Backend
 
 ## Running the server
-Run these commands inside the `server` folder
 
 ```bash
 # development
@@ -36,6 +32,20 @@ Inside server:
 # unit tests
 npm run test
 ```
+
+## Submodules
+The [client](https://github.com/drdreo/poker-client) and [backend](https://github.com/drdreo/poker-backend) are both submodules of [poker](https://github.com/drdreo/poker).
+
+### Updating Submodules
+In order to update the shared dependency correctly, execute:
+```bash
+git submodule update --remote --merge
+```
+
+```bash
+git submodule update --recursive
+```
+
 
 # License TL;DR
 - The source code must be made public whenever a distribution of the software is made.
