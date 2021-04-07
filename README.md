@@ -1,8 +1,7 @@
 
 <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo_text.svg" width="320" alt="Nest Logo" /></a>
 
-[![Build Status](https://travis-ci.com/drdreo/poker.svg?branch=master)](https://travis-ci.com/drdreo/poker)
-[![Netlify Status](https://api.netlify.com/api/v1/badges/ba84f3f4-6438-4553-83e3-f9e8198dd9a1/deploy-status)](https://app.netlify.com/sites/pokern/deploys) 
+[![Build Status](https://travis-ci.com/drdreo/poker-backend.svg?branch=master)](https://travis-ci.com/drdreo/poker-backend)
 
 
 Live app at netlify: https://pokern.netlify.app
