@@ -3,13 +3,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TerminusModule } from '@nestjs/terminus';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 import { LogLevel } from '@sentry/types';
+import { AdminModule } from './admin/admin.module';
+import { AppController } from './app.controller';
 
 import { devConfig, Environment, Config, SentryConfig } from './config/configuration';
 import { prodConfig } from './config/configuration.prod';
 import { testConfig } from './config/configuration.test';
 import { HealthController } from './health/health.controller';
 import { PokerModule } from './poker/poker.module';
-import { AppController } from './app.controller';
 
 @Module({
     controllers: [AppController, HealthController],
@@ -29,7 +30,8 @@ import { AppController } from './app.controller';
         ConfigModule.forRoot({
             load: [process.env.NODE_ENV === Environment.PROD ? prodConfig : process.env.NODE_ENV === Environment.TEST ? testConfig : devConfig]
         }),
-        PokerModule
+        PokerModule,
+        AdminModule
     ]
 })
 export class AppModule {

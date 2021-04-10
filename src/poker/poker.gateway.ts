@@ -1,4 +1,4 @@
-import { Logger, UseInterceptors, HttpStatus } from '@nestjs/common';
+import { Logger, UseInterceptors } from '@nestjs/common';
 import {
     ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer, WsResponse,
     WsException
@@ -26,7 +26,10 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     @WebSocketServer() server: Server;
 
-    connections: Connection[] = [];
+    private connections: Connection[] = [];
+
+    lastPlayerAdded: Date;
+
 
     private logger = new Logger(PokerGateway.name);
 
@@ -46,6 +49,10 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     private getConnectionById(socketId: string): Connection {
         return this.connections.find(conn => conn.id === socketId);
+    }
+
+    public getConnections(): Connection[] {
+        return this.connections;
     }
 
     handleConnection(socket: Client) {
@@ -91,6 +98,8 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     @SubscribeMessage(PlayerEvent.JoinRoom)
     onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, config }): WsResponse<ServerJoined> {
+        this.lastPlayerAdded = new Date();
+
         this.logger.debug(`Player[${ playerName }] joining!`);
         let sanitizedRoom = roomName.toLowerCase();
         socket.join(sanitizedRoom);

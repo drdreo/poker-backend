@@ -57,6 +57,20 @@ export class TableService {
                    });
     }
 
+    getAllAdminTables() {
+        return this.tables
+                   .map(table => {
+                       return {
+                           name: table.name,
+                           started: table.hasGame(),
+                           startTime: table.startTime,
+                           config: table.getConfig(),
+                           players: table.getPlayersPreview(),
+                           currentPlayer: table.currentPlayer
+                       };
+                   });
+    }
+
     getPlayersCount() {
         return this.tables.reduce((prev, cur) => prev + cur.players.length, 0);
     }
