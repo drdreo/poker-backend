@@ -1,4 +1,4 @@
-import { Logger, UseInterceptors, HttpStatus } from '@nestjs/common';
+import { Logger, UseInterceptors } from '@nestjs/common';
 import {
     ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer, WsResponse,
     WsException
@@ -26,7 +26,10 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     @WebSocketServer() server: Server;
 
-    connections: Connection[] = [];
+    private connections: Connection[] = [];
+
+    lastPlayerAdded: Date;
+
 
     private logger = new Logger(PokerGateway.name);
 
@@ -46,6 +49,10 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     private getConnectionById(socketId: string): Connection {
         return this.connections.find(conn => conn.id === socketId);
+    }
+
+    public getConnections(): Connection[] {
+        return this.connections;
     }
 
     handleConnection(socket: Client) {
@@ -91,6 +98,8 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     @SubscribeMessage(PlayerEvent.JoinRoom)
     onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, config }): WsResponse<ServerJoined> {
+        this.lastPlayerAdded = new Date();
+
         this.logger.debug(`Player[${ playerName }] joining!`);
         let sanitizedRoom = roomName.toLowerCase();
         socket.join(sanitizedRoom);
@@ -196,18 +205,23 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     @SubscribeMessage(PlayerEvent.StartGame)
     onStartGame(@ConnectedSocket() socket: Socket) {
-        this.tableService.startGame(socket['table']);
+        const table = socket['table'];
+        this.tableService.startGame(table);
         this.sendHomeInfo();
     }
 
     @SubscribeMessage(PlayerEvent.Leave)
     onPlayerLeave(@ConnectedSocket() socket: Socket) {
-        this.handlePlayerDisconnect(socket['playerID'], socket['table']);
+        const playerID = socket['playerID'];
+        const table = socket['table'];
+        this.handlePlayerDisconnect(playerID, table);
     }
 
     @SubscribeMessage(PlayerEvent.VoteKick)
     onVoteKick(@ConnectedSocket() socket: Socket, @MessageBody() { kickPlayerID }) {
-        this.tableService.voteKick(socket['table'], socket['playerID'], kickPlayerID);
+        const playerID = socket['playerID'];
+        const table = socket['table'];
+        this.tableService.voteKick(table, playerID, kickPlayerID);
     }
 
     /**
@@ -242,7 +256,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const playerID = socket['playerID'];
         const table = socket['table'];
         this.tableService.fold(table, playerID);
-        this.sendTo(table, PokerEvent.PlayerFolded, { playerID } as PlayerFolded);
     }
 
 
@@ -275,6 +288,11 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             }
                 break;
 
+            case TableCommandName.PlayerFolded: {
+                const response: PlayerFolded = { playerID: data.playerID };
+                this.sendTo(table, PokerEvent.PlayerFolded, response);
+            }
+                break;
 
             case TableCommandName.PlayersCards: {
                 const response: GamePlayersUpdate = { players: data.players };

@@ -2,7 +2,9 @@ import { Logger } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import { Subject } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
-import { GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer, PokerConfig } from '../../../shared/src';
+import {
+    GameStatus, BetType, RoundType, PlayerOverview, SidePot, Winner, SidePotPlayer, DefaultConfig, PokerConfig
+} from '../../../shared/src';
 import { TableConfig } from '../../config/table.config';
 import { Bet } from '../game/Bet';
 import { Game } from '../game/Game';
@@ -12,16 +14,6 @@ import mergeDeep, { remapCards, getNextIndex, iterate } from '../utils';
 import { validateConfig, InvalidConfigError, TableFullError, GameStartedError } from './table.utils';
 import { TableCommand, TableCommandName } from './TableCommand';
 import Timeout = NodeJS.Timeout;
-
-interface DefaultConfig extends PokerConfig {
-    afk: {
-        delay: number;
-    };
-    players: {
-        min: number;
-        max: number;
-    };
-}
 
 const defaultConfig: DefaultConfig = {
     spectatorsAllowed: true,
@@ -214,6 +206,10 @@ export class Table {
         });
     }
 
+    public getConfig(): any {
+        return { ...this.pokerConfig, inactiveDelay: this.CONFIG.INACTIVE_DELAY };
+    }
+
     public addPlayer(playerName: string, chips?: number): string {
         if (this.game) {
             throw new GameStartedError('Game already started');
@@ -317,6 +313,14 @@ export class Table {
             name: TableCommandName.PlayerBet,
             table: this.name,
             data: { playerID, bet, type, maxBet: this.game.getMaxBet() }
+        });
+    }
+
+    public sendPlayerFold(playerID: string) {
+        this.commands$.next({
+            name: TableCommandName.PlayerFolded,
+            table: this.name,
+            data: { playerID }
         });
     }
 
@@ -555,6 +559,7 @@ export class Table {
             this.nextPlayer();
         }
         this.sendPlayersUpdate();
+        this.sendPlayerFold(playerID);
     }
 
     check(playerID: string) {
@@ -874,6 +879,15 @@ export class Table {
      * Stopped when game ended.
      */
     private triggerAFKDetection() {
+        if (this.pokerConfig.turn.autoFold) {
+            this.delay('mark-inactive', () => {
+                const currentPlayer = this.players[this.currentPlayer];
+                this.logger.log(`Detected inactive player[${ currentPlayer.name }]!`);
+
+                this.fold(currentPlayer.id);
+            }, this.CONFIG.INACTIVE_DELAY);
+        }
+
         this.delay('mark-afk', () => {
             this.logger.log(`Detected AFK: player[${ this.players[this.currentPlayer].name }]!`);
 
