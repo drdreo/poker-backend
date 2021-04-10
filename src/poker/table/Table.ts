@@ -38,7 +38,6 @@ const defaultConfig: DefaultConfig = {
     },
     table: {
         autoClose: true,
-        autoFold: false,
         rebuy: false
     }
 };
@@ -880,7 +879,7 @@ export class Table {
      * Stopped when game ended.
      */
     private triggerAFKDetection() {
-        if (this.pokerConfig.table.autoFold) {
+        if (this.pokerConfig.turn.autoFold) {
             this.delay('mark-inactive', () => {
                 const currentPlayer = this.players[this.currentPlayer];
                 this.logger.log(`Detected inactive player[${ currentPlayer.name }]!`);
