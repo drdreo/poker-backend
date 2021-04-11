@@ -39,8 +39,8 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             .subscribe((cmd: TableCommand) => this.handleTableCommands(cmd));
     }
 
-    private sendTo(room: string, event: PokerEvent, data?: any) {
-        this.server.to(room).emit(event, data);
+    private sendTo(recipient: string, event: PokerEvent, data?: any) {
+        this.server.to(recipient).emit(event, data);
     }
 
     private sendToAll(event: PokerEvent, data?: any) {
@@ -56,13 +56,13 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     handleConnection(socket: Client) {
-        this.logger.debug(`A new client connected!`);
+        this.logger.debug(`A new client{${ socket.id }} connected!`);
 
         this.connections.push({ id: socket.id, playerID: null });
     }
 
     handleDisconnect(socket: Client) {
-        this.logger.debug(`A client disconnected!`);
+        this.logger.debug(`A client{${ socket.id }} disconnected!`);
 
         this.connections = this.connections.filter(conn => conn.id !== socket.id);
 
@@ -124,18 +124,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 socket['table'] = sanitizedRoom;
             }
 
-            const gameStatus = table.getGameStatus();
-            // tell the player again all information if game started: players, game status, board, pot
-            if (gameStatus === GameStatus.Started) {
-                table.sendCurrentPlayer();
-                table.sendDealerUpdate();
-                table.sendGameBoardUpdate();
-                table.sendPotUpdate();
-                table.sendMaxBetUpdate();
-            }
-
-            this.sendTo(socket.id, PokerEvent.GameStatus, gameStatus);
-
         } else if (playerName) {   // new Player wants to create or join
             this.logger.debug(`New Player[${ playerName }] wants to create or join [${ sanitizedRoom }]!`);
             try {
@@ -174,6 +162,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.connections.find(conn => conn.id === socket.id).playerID = newPlayerID;
 
 
+        // inform everyone what someone joined
         this.tableService.getTable(sanitizedRoom).sendPlayersUpdate();
         return { event: PokerEvent.Joined, data: { playerID: newPlayerID, table: sanitizedRoom } };
     }
@@ -188,20 +177,36 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             socket.join(sanitizedRoom);
             socket['table'] = sanitizedRoom;
 
-            const gameStatus = table.getGameStatus();
             // tell the spectator all information if game started: players, game status, board, pot
-            if (gameStatus === GameStatus.Started) {
-                table.sendCurrentPlayer();
-                table.sendDealerUpdate();
-                table.sendGameBoardUpdate();
-                table.sendPotUpdate();
-                table.sendMaxBetUpdate();
-            }
+            this.onRequestUpdate(socket);
+
             return { event: PokerEvent.Joined, data: { table: sanitizedRoom } };
         } else {
             throw new WsException('Spectating is not allowed!');
         }
     }
+
+    @SubscribeMessage(PlayerEvent.RequestUpdate)
+    onRequestUpdate(@ConnectedSocket() socket: Socket) {
+        const table = this.tableService.getTable(socket['table']);
+        if (!table) {
+            throw new WsException('Can not request data. Table not found!');
+        }
+
+        table.sendPlayersUpdate(socket.id);
+
+        const gameStatus = table.getGameStatus();
+        // tell the spectator all information if game started: players, game status, board, pot
+        if (gameStatus === GameStatus.Started) {
+            table.sendCurrentPlayer(socket.id);
+            table.sendDealerUpdate(socket.id);
+            table.sendGameBoardUpdate(socket.id);
+            table.sendPotUpdate(socket.id);
+            table.sendMaxBetUpdate(socket.id);
+        }
+        table.sendGameStatusUpdate(socket.id);
+    }
+
 
     @SubscribeMessage(PlayerEvent.StartGame)
     onStartGame(@ConnectedSocket() socket: Socket) {
@@ -263,10 +268,11 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
      *    Table Actions
      */
 
-    private handleTableCommands({ name, data, table }: TableCommand) {
+    private handleTableCommands({ name, data, recipient, table }: TableCommand) {
         this.logger.verbose(`Table[${ table }] - ${ name }:`);
         this.logger.debug(data);
 
+        const receiver = recipient ? recipient : table;
         switch (name) {
 
             case TableCommandName.HomeInfo:
@@ -274,89 +280,99 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                 break;
 
             case TableCommandName.GameStarted:
-                this.sendTo(table, PokerEvent.GameStarted);
+                this.sendTo(receiver, PokerEvent.GameStarted);
                 break;
 
             case TableCommandName.PlayerUpdate:
-                this.sendPlayerUpdateToSpectators(table);
-                this.sendPlayerUpdateIndividually(table, data.players);
+                if (recipient) {
+                    const con = this.getConnectionById(recipient);
+                    const player = this.tableService.getTable(table).getPlayer(con.playerID);
+                    if (player) {
+                        this.logger.debug('Sending only the recipient the players update');
+                        this.sendPlayerUpdateIndividually(table, [player]);
+                    }
+                } else {
+                    this.sendPlayerUpdateToSpectators(table);
+                    this.sendPlayerUpdateIndividually(table, data.players);
+                }
+
                 break;
 
             case TableCommandName.PlayerBet: {
                 const response: PlayerBet = { playerID: data.playerID, bet: data.bet, maxBet: data.maxBet, type: data.type };
-                this.sendTo(table, PokerEvent.PlayerBet, response);
+                this.sendTo(receiver, PokerEvent.PlayerBet, response);
             }
                 break;
 
             case TableCommandName.PlayerFolded: {
                 const response: PlayerFolded = { playerID: data.playerID };
-                this.sendTo(table, PokerEvent.PlayerFolded, response);
+                this.sendTo(receiver, PokerEvent.PlayerFolded, response);
             }
                 break;
 
             case TableCommandName.PlayersCards: {
                 const response: GamePlayersUpdate = { players: data.players };
-                this.sendTo(table, PokerEvent.PlayersCards, response);
+                this.sendTo(receiver, PokerEvent.PlayersCards, response);
             }
                 break;
 
             case TableCommandName.PotUpdate: {
                 const response: GamePotUpdate = { pot: data.pot, sidePots: data.sidePots };
-                this.sendTo(table, PokerEvent.PotUpdate, response);
+                this.sendTo(receiver, PokerEvent.PotUpdate, response);
             }
                 break;
 
             case TableCommandName.MaxBetUpdate: {
                 const response: MaxBetUpdate = { maxBet: data.maxBet };
-                this.sendTo(table, PokerEvent.MaxBetUpdate, response);
+                this.sendTo(receiver, PokerEvent.MaxBetUpdate, response);
             }
                 break;
 
             case TableCommandName.GameEnded:
-                this.sendTo(table, PokerEvent.GameEnded);
+                this.sendTo(receiver, PokerEvent.GameEnded);
                 break;
 
             case TableCommandName.GameStatus:
-                this.sendTo(table, PokerEvent.GameStatus, data.gameStatus as GameStatus);
+                this.sendTo(receiver, PokerEvent.GameStatus, data.gameStatus as GameStatus);
                 break;
 
             case TableCommandName.GameWinners: {
                 const response: GameWinners = { winners: data.winners };
-                this.sendTo(table, PokerEvent.GameWinners, response);
+                this.sendTo(receiver, PokerEvent.GameWinners, response);
             }
                 break;
 
             case TableCommandName.CurrentPlayer: {
                 const response: GameCurrentPlayer = { currentPlayerID: data.currentPlayerID };
-                this.sendTo(table, PokerEvent.CurrentPlayer, response);
+                this.sendTo(receiver, PokerEvent.CurrentPlayer, response);
             }
                 break;
 
             case TableCommandName.Dealer: {
                 const response: GameDealerUpdate = { dealerPlayerID: data.dealerPlayerID };
-                this.sendTo(table, PokerEvent.DealerUpdate, response);
+                this.sendTo(receiver, PokerEvent.DealerUpdate, response);
             }
                 break;
 
             case TableCommandName.BoardUpdated: {
                 const response: GameBoardUpdate = { board: data.board };
-                this.sendTo(table, PokerEvent.BoardUpdate, response);
+                this.sendTo(receiver, PokerEvent.BoardUpdate, response);
             }
                 break;
 
             case TableCommandName.NewRound: {
                 const response: GameRoundUpdate = { round: data.round };
-                this.sendTo(table, PokerEvent.NewRound, response);
+                this.sendTo(receiver, PokerEvent.NewRound, response);
             }
                 break;
 
             case TableCommandName.TableClosed :
-                this.sendTo(table, PokerEvent.TableClosed);
+                this.sendTo(receiver, PokerEvent.TableClosed);
                 break;
 
             case TableCommandName.PlayerKicked :
                 const response: PlayerKicked = { kickedPlayer: data.kickedPlayer };
-                this.sendTo(table, PokerEvent.PlayerKick, response);
+                this.sendTo(receiver, PokerEvent.PlayerKick, response);
                 break;
             default:
                 this.logger.warn(`Command[${ name }] was not handled!`);
