@@ -23,6 +23,7 @@ export enum TableCommandName {
 
 export interface TableCommand {
     name: TableCommandName;
+    recipient?: string;
     table: string;
     data?: {
         players?;

@@ -300,10 +300,11 @@ export class Table {
         return this.players.findIndex(player => player.id === playerID);
     }
 
-    public sendPlayersUpdate() {
+    public sendPlayersUpdate(recipient?: string) {
         this.commands$.next({
             name: TableCommandName.PlayerUpdate,
             table: this.name,
+            recipient,
             data: { players: this.players }
         });
     }
@@ -324,34 +325,38 @@ export class Table {
         });
     }
 
-    public sendPotUpdate() {
+    public sendPotUpdate(recipient?: string) {
         this.commands$.next({
             name: TableCommandName.PotUpdate,
             table: this.name,
+            recipient,
             data: { pot: this.game.pot, sidePots: this.getSidePots() }
         });
     }
 
-    public sendMaxBetUpdate() {
+    public sendMaxBetUpdate(recipient?: string) {
         this.commands$.next({
             name: TableCommandName.MaxBetUpdate,
             table: this.name,
+            recipient,
             data: { maxBet: this.game.getMaxBet() }
         });
     }
 
-    public sendGameBoardUpdate() {
+    public sendGameBoardUpdate(recipient?: string) {
         this.commands$.next({
             name: TableCommandName.BoardUpdated,
             table: this.name,
+            recipient,
             data: { board: remapCards(this.game.board) }
         });
     }
 
-    public sendGameRoundUpdate() {
+    public sendGameRoundUpdate(recipient?: string) {
         this.commands$.next({
             name: TableCommandName.NewRound,
             table: this.name,
+            recipient,
             data: { round: this.game.round }
         });
     }
@@ -378,20 +383,22 @@ export class Table {
         });
     }
 
-    private sendGameStatusUpdate() {
+    sendGameStatusUpdate(recipient?: string) {
         this.commands$.next({
             name: TableCommandName.GameStatus,
             table: this.name,
+            recipient,
             data: { gameStatus: this.getGameStatus() }
         });
     }
 
-    sendCurrentPlayer() {
+    sendCurrentPlayer(recipient?: string) {
         const currentPlayer = this.players[this.currentPlayer];
         if (currentPlayer) {
             this.commands$.next({
                 name: TableCommandName.CurrentPlayer,
                 table: this.name,
+                recipient,
                 data: { currentPlayerID: currentPlayer.id }
             });
         } else {
@@ -400,10 +407,11 @@ export class Table {
 
     }
 
-    sendDealerUpdate() {
+    sendDealerUpdate(recipient?: string) {
         this.commands$.next({
             name: TableCommandName.Dealer,
             table: this.name,
+            recipient,
             data: { dealerPlayerID: this.dealer.id }
         });
     }
@@ -929,5 +937,6 @@ export class Table {
 
     removePlayer(player: Player) {
         this.players = this.players.filter(p => p.id !== player.id);
+        this.sendPlayersUpdate();
     }
 }
