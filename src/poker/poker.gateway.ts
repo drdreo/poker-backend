@@ -403,13 +403,18 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const playersData = table.getPlayersPreview();
         const room = this.server.sockets.adapter.rooms[tableName];
 
-        for (const socketID in room.sockets) {
-            const playerId = this.getConnectionById(socketID).playerID;
-            const isPlayer = table.isPlayer(playerId);
-            if (!isPlayer) {
-                this.sendTo(tableName, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
+        if (room) {
+            for (const socketID in room.sockets) {
+                const playerId = this.getConnectionById(socketID).playerID;
+                const isPlayer = table.isPlayer(playerId);
+                if (!isPlayer) {
+                    this.sendTo(tableName, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
+                }
             }
+        } else {
+            this.logger.warn(`Trying to send update to table[${tableName}], but socket.io room does not exist!`);
         }
+
     }
 
     private sendHomeInfo() {
