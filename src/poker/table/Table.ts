@@ -80,7 +80,7 @@ export class Table {
 
     constructor(private CONFIG: TableConfig, public name: string, private customConfig?: PokerConfig) {
         this.logger = new Logger(`Table[${ name }]`);
-        this.logger.debug(`Created!`);
+        this.logger.log(`Created!`);
 
 
         this.logger.debug(this.customConfig);
@@ -606,6 +606,8 @@ export class Table {
     }
 
     private kickPlayer(kickPlayer: Player) {
+        this.logger.log(`Kicking player ${ kickPlayer.name }`);
+
         this.sendPlayerKicked(kickPlayer.name);
         const wasCurrentPlayer = this.isCurrentPlayer(kickPlayer.id);
         const wasLastPlayer = this.currentPlayer === this.players.length - 1;

@@ -100,7 +100,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, config }): WsResponse<ServerJoined> {
         this.lastPlayerAdded = new Date();
 
-        this.logger.debug(`Player[${ playerName }] joining!`);
+        this.logger.log(`Player[${ playerName }] joining!`);
         let sanitizedRoom = roomName.toLowerCase();
         socket.join(sanitizedRoom);
         socket['table'] = sanitizedRoom;
@@ -110,7 +110,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // existing Player needs to reconnect
         if (playerID && this.tableService.playerExists(playerID)) {
-            this.logger.debug(`Player[${ playerName }] needs to reconnect!`);
+            this.logger.log(`Player[${ playerName }] needs to reconnect!`);
             newPlayerID = playerID;
             const table = this.tableService.playerReconnected(playerID);
             this.logger.debug(`Players last table[${ table.name }] found!`);
@@ -171,7 +171,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     onJoinSpectator(@ConnectedSocket() socket: Socket, @MessageBody() { roomName }) {
         const sanitizedRoom = roomName.toLowerCase();
 
-        this.logger.debug(`Spectator trying to join table[${ sanitizedRoom }]!`);
+        this.logger.log(`Spectator trying to join table[${ sanitizedRoom }]!`);
         const table = this.tableService.getTable(sanitizedRoom);
         if (table && table.pokerConfig.spectatorsAllowed) {
             socket.join(sanitizedRoom);
