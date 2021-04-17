@@ -23,7 +23,7 @@ export interface SentryConfig {
 export const devConfig = () => ({
     ENV: Environment.DEV,
     PORT: 3000,
-    WHITELIST: ['http://localhost:4200'],
+    WHITELIST: ['http://localhost:4200', 'https://admin.socket.io'],
     SENTRY: {
         DSN: 'https://84b1e4f998e14d0182b75bef0d2f48ff@o528779.ingest.sentry.io/5646377',
         TRACES_SAMPLE_RATE: 1.0,

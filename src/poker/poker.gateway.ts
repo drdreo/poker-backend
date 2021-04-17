@@ -3,7 +3,7 @@ import {
     ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer, WsResponse,
     WsException
 } from '@nestjs/websockets';
-import { Client, Server, Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import {
     PokerEvent, GameStatus, GameRoundUpdate, GameBoardUpdate, GameDealerUpdate, GameCurrentPlayer, GameWinners, GamePotUpdate,
     GamePlayersUpdate, PlayerBet, HomeInfo, PlayerEvent, ServerJoined, PlayerChecked, PlayerCalled, PlayerFolded, MaxBetUpdate, PlayerKicked
@@ -55,13 +55,13 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return this.connections;
     }
 
-    handleConnection(socket: Client) {
+    handleConnection(socket: Socket) {
         this.logger.debug(`A new client{${ socket.id }} connected!`);
 
         this.connections.push({ id: socket.id, playerID: null });
     }
 
-    handleDisconnect(socket: Client) {
+    handleDisconnect(socket: Socket) {
         this.logger.debug(`A client{${ socket.id }} disconnected!`);
 
         this.connections = this.connections.filter(conn => conn.id !== socket.id);
@@ -401,18 +401,14 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private sendPlayerUpdateToSpectators(tableName: string) {
         const table = this.tableService.getTable(tableName);
         const playersData = table.getPlayersPreview();
-        const room = this.server.sockets.adapter.rooms[tableName];
+        const allSockets = this.server.in(tableName).fetchSockets();
 
-        if (room) {
-            for (const socketID in room.sockets) {
-                const playerId = this.getConnectionById(socketID).playerID;
-                const isPlayer = table.isPlayer(playerId);
-                if (!isPlayer) {
-                    this.sendTo(tableName, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
-                }
+        for (const socketID in allSockets) {
+            const playerId = this.getConnectionById(socketID).playerID;
+            const isPlayer = table.isPlayer(playerId);
+            if (!isPlayer) {
+                this.sendTo(tableName, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
             }
-        } else {
-            this.logger.warn(`Trying to send update to table[${tableName}], but socket.io room does not exist!`);
         }
 
     }

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './src/app.module';
 import { Config, Environment } from './src/config/configuration';
+import { SocketAdapter } from './src/socket-adapter';
 
 const logLevels: LogLevel[] = process.env.NODE_ENV === 'prod' ? ['error', 'warn', 'log'] : ['log', 'error', 'warn', 'debug', 'verbose'];
 
@@ -30,6 +31,8 @@ async function bootstrap() {
         methods: 'GET,PUT,POST,DELETE,UPDATE,OPTIONS',
         credentials: true
     });
+
+    app.useWebSocketAdapter(new SocketAdapter(app, whitelist));
 
     const port = configService.get<number>('PORT');
     logger.log(`App listening on port {${ port }}`);
