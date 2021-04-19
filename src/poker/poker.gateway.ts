@@ -15,11 +15,6 @@ import { InvalidConfigError, GameStartedError, TableFullError } from './table/ta
 import { TableCommand, TableCommandName } from './table/TableCommand';
 import { remapCards } from './utils';
 
-interface Connection {
-    id: string;
-    playerID: string | null;
-}
-
 @UseInterceptors(SentryInterceptor)
 @WebSocketGateway()
 export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -29,7 +24,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private connections: Connection[] = [];
 
     lastPlayerAdded: Date;
-
 
     private logger = new Logger(PokerGateway.name);
 
@@ -295,7 +289,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
                     this.sendPlayerUpdateToSpectators(table);
                     this.sendPlayerUpdateIndividually(table, data.players);
                 }
-
                 break;
 
             case TableCommandName.PlayerBet: {
@@ -380,7 +373,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
     }
 
-    private sendPlayerUpdateIndividually(table: string, players: Player[]) {
+    private async sendPlayerUpdateIndividually(table: string, players: Player[]) {
         // tell every player the cards specifically
         for (const player of players) {
 
@@ -398,14 +391,13 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
     }
 
-    private sendPlayerUpdateToSpectators(tableName: string) {
+    private async sendPlayerUpdateToSpectators(tableName: string) {
         const table = this.tableService.getTable(tableName);
         const playersData = table.getPlayersPreview();
-        const allSockets = this.server.in(tableName).fetchSockets();
+        const allSockets = await this.server.in(tableName).fetchSockets();
 
-        for (const socketID in allSockets) {
-            const playerId = this.getConnectionById(socketID).playerID;
-            const isPlayer = table.isPlayer(playerId);
+        for (const socket of allSockets) {
+            const isPlayer = table.isPlayer(socket['playerID']);
             if (!isPlayer) {
                 this.sendTo(tableName, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
             }
