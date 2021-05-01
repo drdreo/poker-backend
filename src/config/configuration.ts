@@ -34,6 +34,5 @@ export const devConfig = () => ({
         NEXT_GAME_DELAY: 7500,
         AUTO_DESTROY_DELAY: 5000,
         AFK_DELAY: 15000,
-        INACTIVE_DELAY: 20000
     }
 } as Config);

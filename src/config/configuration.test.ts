@@ -14,6 +14,5 @@ export const testConfig = () => ({
         NEXT_GAME_DELAY: 10000, // should just prevent next game from being triggered
         AUTO_DESTROY_DELAY: 5000,
         AFK_DELAY: 10000, // should prevent tests from going AFK
-        INACTIVE_DELAY: 20000
     }
 } as Config);
