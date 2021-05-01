@@ -3,7 +3,7 @@ import {
     ConnectedSocket, MessageBody, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer, WsResponse,
     WsException
 } from '@nestjs/websockets';
-import { Client, Server, Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import {
     PokerEvent, GameStatus, GameRoundUpdate, GameBoardUpdate, GameDealerUpdate, GameCurrentPlayer, GameWinners, GamePotUpdate,
     GamePlayersUpdate, PlayerBet, HomeInfo, PlayerEvent, ServerJoined, PlayerChecked, PlayerCalled, PlayerFolded, MaxBetUpdate, PlayerKicked
@@ -15,21 +15,13 @@ import { InvalidConfigError, GameStartedError, TableFullError } from './table/ta
 import { TableCommand, TableCommandName } from './table/TableCommand';
 import { remapCards } from './utils';
 
-interface Connection {
-    id: string;
-    playerID: string | null;
-}
-
 @UseInterceptors(SentryInterceptor)
 @WebSocketGateway()
 export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     @WebSocketServer() server: Server;
 
-    private connections: Connection[] = [];
-
     lastPlayerAdded: Date;
-
 
     private logger = new Logger(PokerGateway.name);
 
@@ -47,24 +39,27 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.server.emit(event, data);
     }
 
-    private getConnectionById(socketId: string): Connection {
-        return this.connections.find(conn => conn.id === socketId);
+    private async getSocketIdByPlayerId(playerId: string) {
+        const sockets = await this.server.fetchSockets();
+        return sockets.find(socket => socket['playerID'] === playerId)?.id;
     }
 
-    public getConnections(): Connection[] {
-        return this.connections;
+    private async getPlayerIdBySocketId(socketId: string) {
+        const sockets = await this.server.fetchSockets();
+        const socket = sockets.find(socket => socket.id === socketId);
+
+        if (socket) {
+            return socket['playerID'];
+        }
+        return undefined;
     }
 
-    handleConnection(socket: Client) {
+    handleConnection(socket: Socket) {
         this.logger.debug(`A new client{${ socket.id }} connected!`);
-
-        this.connections.push({ id: socket.id, playerID: null });
     }
 
-    handleDisconnect(socket: Client) {
+    handleDisconnect(socket: Socket) {
         this.logger.debug(`A client{${ socket.id }} disconnected!`);
-
-        this.connections = this.connections.filter(conn => conn.id !== socket.id);
 
         this.handlePlayerDisconnect(socket['playerID'], socket['table']);
     }
@@ -100,7 +95,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, config }): WsResponse<ServerJoined> {
         this.lastPlayerAdded = new Date();
 
-        this.logger.debug(`Player[${ playerName }] joining!`);
+        this.logger.log(`Player[${ playerName }] joining!`);
         let sanitizedRoom = roomName.toLowerCase();
         socket.join(sanitizedRoom);
         socket['table'] = sanitizedRoom;
@@ -110,7 +105,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // existing Player needs to reconnect
         if (playerID && this.tableService.playerExists(playerID)) {
-            this.logger.debug(`Player[${ playerName }] needs to reconnect!`);
+            this.logger.log(`Player[${ playerName }] needs to reconnect!`);
             newPlayerID = playerID;
             const table = this.tableService.playerReconnected(playerID);
             this.logger.debug(`Players last table[${ table.name }] found!`);
@@ -159,8 +154,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // connect the socket with its playerID
         socket['playerID'] = newPlayerID;
         socket['table'] = sanitizedRoom;
-        this.connections.find(conn => conn.id === socket.id).playerID = newPlayerID;
-
 
         // inform everyone what someone joined
         this.tableService.getTable(sanitizedRoom).sendPlayersUpdate();
@@ -171,7 +164,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     onJoinSpectator(@ConnectedSocket() socket: Socket, @MessageBody() { roomName }) {
         const sanitizedRoom = roomName.toLowerCase();
 
-        this.logger.debug(`Spectator trying to join table[${ sanitizedRoom }]!`);
+        this.logger.log(`Spectator trying to join table[${ sanitizedRoom }]!`);
         const table = this.tableService.getTable(sanitizedRoom);
         if (table && table.pokerConfig.spectatorsAllowed) {
             socket.join(sanitizedRoom);
@@ -273,6 +266,8 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.logger.debug(data);
 
         const receiver = recipient ? recipient : table;
+        recipient ? this.logger.debug('Recipient was set to: ' + recipient) : '';
+
         switch (name) {
 
             case TableCommandName.HomeInfo:
@@ -285,17 +280,18 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
             case TableCommandName.PlayerUpdate:
                 if (recipient) {
-                    const con = this.getConnectionById(recipient);
-                    const player = this.tableService.getTable(table).getPlayer(con.playerID);
-                    if (player) {
-                        this.logger.debug('Sending only the recipient the players update');
-                        this.sendPlayerUpdateIndividually(table, [player]);
-                    }
+                    this.getPlayerIdBySocketId(receiver)
+                        .then(playerId => {
+                            const player = this.tableService.getTable(table).getPlayer(playerId);
+                            if (player) {
+                                this.logger.debug('Sending only the recipient the players update');
+                                this.sendPlayerUpdateIndividually(table, [player]);
+                            }
+                        });
                 } else {
                     this.sendPlayerUpdateToSpectators(table);
                     this.sendPlayerUpdateIndividually(table, data.players);
                 }
-
                 break;
 
             case TableCommandName.PlayerBet: {
@@ -380,36 +376,36 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
     }
 
-    private sendPlayerUpdateIndividually(table: string, players: Player[]) {
+    private async sendPlayerUpdateIndividually(table: string, players: Player[]) {
         // tell every player the cards specifically
         for (const player of players) {
 
-            const conn = this.connections.find(conn => conn.playerID === player.id);
-
+            // const conn = this.connections.find(conn => conn.playerID === player.id);
+            const socketId = await this.getSocketIdByPlayerId(player.id);
             // only tell currently connected players the update
-            if (conn && !player.disconnected) {
+            if (socketId && !player.disconnected) {
                 const playersData = this.tableService.getTable(table).getPlayersPreview(); //TODO: for performance do not query each time
 
                 // find the player in the data again and reveal cards
                 playersData.find(p => p.id === player.id)['cards'] = remapCards(player.cards);
 
-                this.sendTo(conn.id, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
+                this.sendTo(socketId, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
             }
         }
     }
 
-    private sendPlayerUpdateToSpectators(tableName: string) {
+    private async sendPlayerUpdateToSpectators(tableName: string) {
         const table = this.tableService.getTable(tableName);
         const playersData = table.getPlayersPreview();
-        const room = this.server.sockets.adapter.rooms[tableName];
+        const allSockets = await this.server.in(tableName).fetchSockets();
 
-        for (const socketID in room.sockets) {
-            const playerId = this.getConnectionById(socketID).playerID;
-            const isPlayer = table.isPlayer(playerId);
+        for (const socket of allSockets) {
+            const isPlayer = table.isPlayer(socket['playerID']);
             if (!isPlayer) {
                 this.sendTo(tableName, PokerEvent.PlayersUpdate, { players: playersData } as GamePlayersUpdate);
             }
         }
+
     }
 
     private sendHomeInfo() {

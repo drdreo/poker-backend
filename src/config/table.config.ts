@@ -3,5 +3,4 @@ export interface TableConfig {
     NEXT_GAME_DELAY: number;
     AUTO_DESTROY_DELAY: number;
     AFK_DELAY: number;
-    INACTIVE_DELAY: number;
 }

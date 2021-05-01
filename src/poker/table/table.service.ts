@@ -81,6 +81,7 @@ export class TableService {
             if (player) {
                 // if the game didnt start yet, just remove the player
                 if (table.getGameStatus() === GameStatus.Waiting) {
+                    this.logger.log(`Player[${ player.name }] removed, because game didn't start yet!`);
                     table.removePlayer(player);
                 } else {
                     player.disconnected = true;
@@ -95,7 +96,7 @@ export class TableService {
                         table.destroy();
                         this.tables = this.tables.filter(t => t.name !== table.name);
                         this.sendCommand({ name: TableCommandName.HomeInfo, table: table.name });
-                        this.logger.debug(`Table[${ table.name }] removed!`);
+                        this.logger.log(`Table[${ table.name }] removed!`);
                     }
                 }, this.CONFIG.AUTO_DESTROY_DELAY);
                 return;
