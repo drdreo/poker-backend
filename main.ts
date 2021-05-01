@@ -5,7 +5,7 @@ import { AppModule } from './src/app.module';
 import { Config, Environment } from './src/config/configuration';
 import { SocketAdapter } from './src/socket-adapter';
 
-const logLevels: LogLevel[] = process.env.NODE_ENV === 'prod' ? ['error', 'warn', 'log'] : ['log', 'error', 'warn', 'debug', 'verbose'];
+const logLevels: LogLevel[] = process.env.NODE_ENV === 'dev' ? ['log', 'error', 'warn', 'debug', 'verbose'] : ['error', 'warn', 'log'];
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule, {
