@@ -77,8 +77,6 @@
     },
     "coverageDirectory": "./coverage",
     "testEnvironment": "node",
-    "setupFilesAfterEnv": [
-      "../test-setup.ts"
-    ]
+    "setupFilesAfterEnv": ["../test/test-setup.ts"]
   }
 }
