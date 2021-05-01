@@ -11,6 +11,7 @@ jobs:
     script: npm run test:ci
 
   - stage: Deploy
+    if: (type = push AND branch = master)
     deploy:
       provider: heroku
       app: pokern
