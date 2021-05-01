@@ -19,7 +19,7 @@ const defaultConfig: DefaultConfig = {
     spectatorsAllowed: true,
     isPublic: true,
     turn: {
-        time: -1,
+        time: -1, // -1 = unlimited, other in seconds
         autoFold: false
     },
     chips: 1000,
@@ -207,7 +207,7 @@ export class Table {
     }
 
     public getConfig(): any {
-        return { ...this.pokerConfig, inactiveDelay: this.CONFIG.INACTIVE_DELAY };
+        return { ...this.pokerConfig };
     }
 
     public addPlayer(playerName: string, chips?: number): string {
@@ -502,7 +502,9 @@ export class Table {
         // }
     }
 
-    bet(playerID: string, bet: number, type: BetType = BetType.Bet) {
+    bet(playerID: string, bet: number, betType: BetType = BetType.Bet) {
+
+        const userAction = betType !== BetType.SmallBlind && betType !== BetType.BigBlind;
 
         const playerIndex = this.getPlayerIndexByID(playerID);
         if (playerIndex !== this.currentPlayer) {
@@ -510,10 +512,10 @@ export class Table {
         }
 
         const player = this.players[playerIndex];
-        this.logger.debug(`Player[${ player.name }] bet[${ type }][${ bet }]!`);
+        this.logger.debug(`Player[${ player.name }] bet[${ betType }][${ bet }]!`);
 
         // Check if bet was at allowed by min raise, but let call bets still proceed
-        if (type === BetType.Bet || type === BetType.Raise) {
+        if (betType === BetType.Bet || betType === BetType.Raise) {
             const maxBet = this.game.getMaxBet();
             const minRaise = this.pokerConfig.blinds.big; // TODO: Check if min raise is big blind or the current max bet
             if (bet < maxBet + minRaise && bet != player.chips) {
@@ -530,28 +532,27 @@ export class Table {
         // check if all-in
         if (player.chips <= 0) {
             player.allIn = true;
-            type = BetType.AllIn;
+            betType = BetType.AllIn;
             this.logger.debug(player.name + ' went all-in!');
         }
 
-        const playerBet = new Bet(bet, type);
+        const playerBet = new Bet(bet, betType);
         player.bet = playerBet;
 
         this.game.bet(playerIndex, playerBet);
 
-        this.sendPlayerBet(playerID, bet, type);
+        this.sendPlayerBet(playerID, bet, betType);
 
-        const next = this.progress();
+        const next = this.progress(userAction);
         if (next) {
-            const shouldSendUpdate = type !== BetType.SmallBlind;
-            this.nextPlayer(shouldSendUpdate);
-            if (shouldSendUpdate) {
+            this.nextPlayer(userAction);
+            if (userAction) {
                 this.sendPlayersUpdate();
             }
         }
     }
 
-    fold(playerID: string) {
+    fold(playerID: string, userAction = true) {
         const playerIndex = this.getPlayerIndexByID(playerID);
         if (playerIndex !== this.currentPlayer) {
             throw new WsException('Not your turn!');
@@ -562,7 +563,7 @@ export class Table {
 
         player.folded = true;
 
-        const next = this.progress();
+        const next = this.progress(userAction);
         if (next) {
             this.nextPlayer();
         }
@@ -674,9 +675,9 @@ export class Table {
         return this.game.round.type;
     }
 
-    private progress(action = true): boolean {
+    private progress(userAction = true): boolean {
         // every action ends up here, so check if the player returned from AFK
-        if (action) {
+        if (userAction) {
             this.unmarkPlayerAFK(this.currentPlayer);
         }
 
@@ -889,13 +890,13 @@ export class Table {
      * Stopped when game ended.
      */
     private triggerAFKDetection() {
-        if (this.pokerConfig.turn.autoFold) {
+        if (this.pokerConfig.turn.time > 1) {
             this.delay('mark-inactive', () => {
                 const currentPlayer = this.players[this.currentPlayer];
                 this.logger.log(`Detected inactive player[${ currentPlayer.name }]!`);
 
-                this.fold(currentPlayer.id);
-            }, this.CONFIG.INACTIVE_DELAY);
+                this.fold(currentPlayer.id, false);
+            }, this.pokerConfig.turn.time * 1000 + 2000);
         }
 
         this.delay('mark-afk', () => {

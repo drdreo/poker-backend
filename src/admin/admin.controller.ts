@@ -13,7 +13,7 @@ export class AdminController {
     getAdminInfo(): any {
         return {
             tables: this.tableService.getAllAdminTables(),
-            sockets: this.pokerGateway.getConnections(),
+            sockets: [],
             uptime: (new Date().getTime() - this.appService.uptime.getTime()) / 1000,
             lastPlayerAdded: this.pokerGateway.lastPlayerAdded
         };
