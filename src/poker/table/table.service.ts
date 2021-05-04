@@ -153,6 +153,15 @@ export class TableService {
         table.voteKick(playerID, kickPlayerID);
     }
 
+    showCards(tableName: string, playerID: string) {
+        const table = this.getTable(tableName);
+        if (!table) {
+            throw new WsException(`Can not show cards on Table[${ tableName }] because it does not exist.`);
+        }
+
+        table.showCards(playerID);
+    }
+
     /***********************
      * Game methods
      ************************/

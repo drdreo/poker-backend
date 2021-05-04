@@ -222,6 +222,14 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.tableService.voteKick(table, playerID, kickPlayerID);
     }
 
+    @SubscribeMessage(PlayerEvent.ShowCards)
+    onShowCards(@ConnectedSocket() socket: Socket) {
+        const playerID = socket['playerID'];
+        const table = socket['table'];
+        this.tableService.showCards(table, playerID);
+    }
+
+
     /**
      *
      * Game Actions
@@ -380,7 +388,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // tell every player the cards specifically
         for (const player of players) {
 
-            // const conn = this.connections.find(conn => conn.playerID === player.id);
             const socketId = await this.getSocketIdByPlayerId(player.id);
             // only tell currently connected players the update
             if (socketId && !player.disconnected) {

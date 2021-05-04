@@ -19,8 +19,7 @@ const defaultConfig: DefaultConfig = {
     spectatorsAllowed: true,
     isPublic: true,
     turn: {
-        time: -1, // -1 = unlimited, other in seconds
-        autoFold: false
+        time: -1 // -1 = unlimited, other in seconds
     },
     chips: 1000,
     blinds: {
@@ -123,7 +122,7 @@ export class Table {
         });
     }
 
-    public destroy(): void {
+    destroy(): void {
         this.logger.debug(`Destroy!`);
 
         for (const id in this.timeoutHandler) {
@@ -132,19 +131,19 @@ export class Table {
         }
     }
 
-    public getGame(): Game {
+    getGame(): Game {
         return this.game;
     }
 
-    public hasGame(): boolean {
+    hasGame(): boolean {
         return !!this.game;
     }
 
-    public isGameEnded(): boolean {
+    isGameEnded(): boolean {
         return this.game.ended;
     }
 
-    public getPlayer(playerID: string): Player {
+    getPlayer(playerID: string): Player {
         return this.players.find(player => player.id === playerID);
     }
 
@@ -156,7 +155,7 @@ export class Table {
         return this.players.filter(player => !player.folded);
     }
 
-    public isPlayer(playerID: string): boolean {
+    isPlayer(playerID: string): boolean {
         return this.players.some(player => player.id === playerID);
     }
 
@@ -164,7 +163,7 @@ export class Table {
         return this.getCurrentPlayer().id === playerID;
     }
 
-    public getCurrentPlayer(): Player {
+    getCurrentPlayer(): Player {
         return this.players[this.currentPlayer];
     }
 
@@ -173,7 +172,7 @@ export class Table {
     }
 
     // Test utils method
-    public getRoundType(): RoundType {
+    getRoundType(): RoundType {
         return this.game.round.type;
     }
 
@@ -181,14 +180,14 @@ export class Table {
         this.players.map(player => player.bet = null);
     }
 
-    public getGameStatus(): GameStatus {
+    getGameStatus(): GameStatus {
         if (this.game) {
             return this.game.ended ? GameStatus.Ended : GameStatus.Started;
         }
         return GameStatus.Waiting;
     }
 
-    public getSidePots(): SidePot[] {
+    getSidePots(): SidePot[] {
         const pots: SidePot[] = [];
         for (const pot of this.game.sidePots) {
             const potPlayers = pot.players.reduce((prev, cur) => {
@@ -200,17 +199,17 @@ export class Table {
         return pots;
     }
 
-    public getPlayersPreview(showCards = false): PlayerOverview[] {
+    getPlayersPreview(): PlayerOverview[] {
         return this.players.map(player => {
-            return Player.getPlayerOverview(player, showCards);
+            return Player.getPlayerOverview(player);
         });
     }
 
-    public getConfig(): any {
+    getConfig(): any {
         return { ...this.pokerConfig };
     }
 
-    public addPlayer(playerName: string, chips?: number): string {
+    addPlayer(playerName: string, chips?: number): string {
         if (this.game) {
             throw new GameStartedError('Game already started');
         }
@@ -253,11 +252,21 @@ export class Table {
         this.setDealer(this.players[getNextIndex(dealerIndex, this.players)]);
     }
 
+    private showAllPlayersCards() {
+        this.players.map(player => {
+            if (!player.folded) {
+                player.showCards = true;
+            }
+        });
+
+        this.sendPlayersUpdate();
+    }
+
     private showPlayersCards() {
         this.commands$.next({
             name: TableCommandName.PlayersCards,
             table: this.name,
-            data: { players: this.getPlayersPreview(true) }
+            data: { players: this.getPlayersPreview() }
         });
     }
 
@@ -364,8 +373,7 @@ export class Table {
     private sendGameStarted() {
         this.commands$.next({
             name: TableCommandName.GameStarted,
-            table: this.name,
-            data: { players: this.players }
+            table: this.name
         });
     }
 
@@ -587,6 +595,15 @@ export class Table {
         }
     }
 
+    showCards(playerID: string) {
+        const player = this.getPlayer(playerID);
+        if (!player) {
+            throw new WsException('Not a player!');
+        }
+
+        player.showCards = true;
+        this.sendPlayersUpdate();
+    }
 
     voteKick(playerID: string, kickPlayerID: string) {
         if (playerID === kickPlayerID) {
@@ -693,7 +710,7 @@ export class Table {
             const allInPlayers = this.players.filter(player => player.allIn);
             if (!everyoneElseFolded && allInPlayers.length != 0 && allInPlayers.length >= this.getActivePlayers().length - 1) {
                 this.logger.debug('All in situation, auto-play game');
-                this.showPlayersCards();
+                this.showAllPlayersCards();
 
                 // play until RoundType.River
                 do {
@@ -709,7 +726,7 @@ export class Table {
 
                 // only show cards if it was the last betting round
                 if (round === RoundType.River) {
-                    this.showPlayersCards(); // showing cards twice if all-in situation
+                    this.showAllPlayersCards(); // showing cards twice if all-in situation
                 }
 
                 const endGameDelay = everyoneElseFolded ? 2000 : this.CONFIG.END_GAME_DELAY;

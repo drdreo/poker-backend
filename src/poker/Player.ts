@@ -4,6 +4,7 @@ import { remapCards, hideCards } from './utils';
 
 export class Player {
     cards: string[] = [];
+    showCards = false;
     hand: SolvedHand | null;
     bet: Bet | null = null;
     dealer = false;
@@ -12,18 +13,19 @@ export class Player {
     hasSidePot = false;
     disconnected = false;
     afk = false;
-    kickVotes: Set<string> = new Set()
+    kickVotes: Set<string> = new Set();
 
     constructor(public id: string, public name: string, public color: string, public chips: number) {
     }
 
-    static getPlayerOverview(player: Player, showCards: boolean): PlayerOverview {
+    static getPlayerOverview(player: Player): PlayerOverview {
         return {
             id: player.id,
             name: player.name,
             chips: player.chips,
             bet: player.bet,
-            cards: showCards && !player.folded ? remapCards(player.cards) : hideCards(player.cards),
+            cards: (player.showCards) && !player.folded ? remapCards(player.cards) : hideCards(player.cards),
+            showCards: player.showCards,
             allIn: player.allIn,
             folded: player.folded,
             color: player.color,
@@ -48,6 +50,7 @@ export class Player {
         this.hasSidePot = false;
         this.hand = null;
         this.cards = [];
+        this.showCards = false;
         this.bet = null;
     }
 
