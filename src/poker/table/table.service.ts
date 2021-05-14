@@ -1,17 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { WsException } from '@nestjs/websockets';
-import { PokerConfig, GameStatus } from '@shared/src';
+import { PokerConfig, GameStatus, GameType } from '@shared/src';
 import { Subject } from 'rxjs';
 import { Config } from '../../config/configuration';
 import { TableConfig } from '../../config/table.config';
+import { BaseTable } from './BaseTable';
 import { Table } from './Table';
+import { CoinFlipTable } from './Table-CoinFlip';
 import { TableCommand, TableCommandName } from './TableCommand';
 
 @Injectable()
 export class TableService {
 
-    tables: Table[] = [];
+    tables: BaseTable[] = [];
 
     private _tableCommands$ = new Subject<TableCommand>();
     tableCommands$ = this._tableCommands$.asObservable();
@@ -32,8 +34,18 @@ export class TableService {
         this._tableCommands$.next(command);
     }
 
-    createTable(name: string, config?: PokerConfig): Table {
-        const table = new Table(this.CONFIG, name, config);
+    createTable(type: GameType, name: string, config?: PokerConfig): BaseTable {
+        let table;
+        switch (type) {
+            case GameType.TexasHoldem:
+                table = new Table(this.CONFIG, name, config);
+                break;
+            case GameType.CoinFlip:
+                table = new CoinFlipTable(this.CONFIG, name, config);
+                break;
+            default:
+        }
+
         table.commands$ = this._tableCommands$;
         this.tables.push(table);
         return table;
@@ -45,7 +57,7 @@ export class TableService {
         });
     }
 
-    getTable(name: string): Table {
+    getTable(name: string): BaseTable {
         return this.tables.find(table => table.name === name);
     }
 
@@ -66,7 +78,7 @@ export class TableService {
                            startTime: table.startTime,
                            config: table.getConfig(),
                            players: table.getPlayersPreview(),
-                           currentPlayer: table.currentPlayer
+                           currentPlayer: (table instanceof Table) ? table.currentPlayer : undefined
                        };
                    });
     }
@@ -104,7 +116,7 @@ export class TableService {
         }
     }
 
-    playerReconnected(playerID: string): Table {
+    playerReconnected(playerID: string): BaseTable {
         for (const table of this.tables) {
             const player = table.players.find(player => player.id === playerID);
             if (player) {
@@ -118,12 +130,12 @@ export class TableService {
      *
      * @returns the new players ID
      */
-    createOrJoinTable(tableName: string, playerName: string, config?: PokerConfig): { playerID: string } {
+    createOrJoinTable(gameType: GameType, tableName: string, playerName: string, config?: PokerConfig): { playerID: string } {
         let table = this.getTable(tableName);
 
         if (!table) {
-            this.logger.debug(`Player[${ playerName }] created a table!`);
-            table = this.createTable(tableName, config);
+            this.logger.debug(`Player[${ playerName }] created a table - ${gameType}!`);
+            table = this.createTable(gameType, tableName, config);
         }
 
         this.logger.debug(`Player[${ playerName }] joining Table[${ tableName }]!`);
@@ -146,11 +158,11 @@ export class TableService {
 
     voteKick(tableName: string, playerID: string, kickPlayerID: string) {
         const table = this.getTable(tableName);
-        if (!table) {
+        if (table && table instanceof Table) {
+            table.voteKick(playerID, kickPlayerID);
+        } else {
             throw new WsException(`Can not vote kick on Table[${ tableName }] because it does not exist.`);
         }
-
-        table.voteKick(playerID, kickPlayerID);
     }
 
     showCards(tableName: string, playerID: string) {
@@ -169,7 +181,7 @@ export class TableService {
     check(tableName: string, playerID: string) {
         const table = this.tables.find(table => table.name === tableName);
 
-        if (table) {
+        if (table && table instanceof Table) {
             if (table.hasGame() || table.isGameEnded()) {
                 table.check(playerID);
             } else {
@@ -183,7 +195,7 @@ export class TableService {
     call(tableName: string, playerID: string) {
         const table = this.tables.find(table => table.name === tableName);
 
-        if (table) {
+        if (table && table instanceof Table) {
             if (table.hasGame() || table.isGameEnded()) {
                 this.logger.debug(`Player[${ playerID }] called!`);
                 table.call(playerID);
@@ -198,7 +210,7 @@ export class TableService {
     bet(tableName: string, playerID: string, coins: number) {
         const table = this.tables.find(table => table.name === tableName);
 
-        if (table) {
+        if (table && table instanceof Table) {
             if (table.hasGame() || table.isGameEnded()) {
                 table.bet(playerID, coins);
             } else {
@@ -212,7 +224,7 @@ export class TableService {
     fold(tableName: string, playerID: string) {
         const table = this.tables.find(table => table.name === tableName);
 
-        if (table) {
+        if (table && table instanceof Table) {
             if (table.hasGame() || table.isGameEnded()) {
                 table.fold(playerID);
             } else {
