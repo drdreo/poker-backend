@@ -24,9 +24,6 @@ export function validateConfig(config: any): boolean {
     if (isNaN(testingConfig.turn.time)) {
         return false;
     }
-    if (typeof testingConfig.turn.autoFold != 'boolean') {
-        return false;
-    }
     if (isNaN(testingConfig.chips) || testingConfig.chips < 0) {
         return false;
     }

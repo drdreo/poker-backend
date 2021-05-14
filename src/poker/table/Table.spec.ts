@@ -103,7 +103,6 @@ describe('Table', () => {
                 "rebuy": false
             },
             "turn": {
-                "autoFold": false,
                 "time": -1
             }
         };

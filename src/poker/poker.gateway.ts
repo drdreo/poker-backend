@@ -6,10 +6,12 @@ import {
 import { Server, Socket } from 'socket.io';
 import {
     PokerEvent, GameStatus, GameRoundUpdate, GameBoardUpdate, GameDealerUpdate, GameCurrentPlayer, GameWinners, GamePotUpdate,
-    GamePlayersUpdate, PlayerBet, HomeInfo, PlayerEvent, ServerJoined, PlayerChecked, PlayerCalled, PlayerFolded, MaxBetUpdate, PlayerKicked
+    GamePlayersUpdate, PlayerBet, HomeInfo, PlayerEvent, ServerJoined, PlayerChecked, PlayerCalled, PlayerFolded, MaxBetUpdate,
+    PlayerKicked, GameType
 } from '../../shared/src';
 import { SentryInterceptor } from '../sentry.interceptor';
 import { Player } from './Player';
+import { Table } from './table/Table';
 import { TableService } from './table/table.service';
 import { InvalidConfigError, GameStartedError, TableFullError } from './table/table.utils';
 import { TableCommand, TableCommandName } from './table/TableCommand';
@@ -92,7 +94,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     @SubscribeMessage(PlayerEvent.JoinRoom)
-    onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, config }): WsResponse<ServerJoined> {
+    onJoinRoom(@ConnectedSocket() socket: Socket, @MessageBody() { playerID, roomName, playerName, gameType = GameType.TexasHoldem, config }): WsResponse<ServerJoined> {
         this.lastPlayerAdded = new Date();
 
         this.logger.log(`Player[${ playerName }] joining!`);
@@ -122,7 +124,7 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         } else if (playerName) {   // new Player wants to create or join
             this.logger.debug(`New Player[${ playerName }] wants to create or join [${ sanitizedRoom }]!`);
             try {
-                const response = this.tableService.createOrJoinTable(sanitizedRoom, playerName, config);
+                const response = this.tableService.createOrJoinTable(gameType, sanitizedRoom, playerName, config);
                 newPlayerID = response.playerID;
                 this.sendHomeInfo();
             } catch (e) {
@@ -191,7 +193,10 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const gameStatus = table.getGameStatus();
         // tell the spectator all information if game started: players, game status, board, pot
         if (gameStatus === GameStatus.Started) {
-            table.sendCurrentPlayer(socket.id);
+            if (table instanceof Table) {
+                table.sendCurrentPlayer(socket.id);
+            }
+
             table.sendDealerUpdate(socket.id);
             table.sendGameBoardUpdate(socket.id);
             table.sendPotUpdate(socket.id);
@@ -221,6 +226,14 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         const table = socket['table'];
         this.tableService.voteKick(table, playerID, kickPlayerID);
     }
+
+    @SubscribeMessage(PlayerEvent.ShowCards)
+    onShowCards(@ConnectedSocket() socket: Socket) {
+        const playerID = socket['playerID'];
+        const table = socket['table'];
+        this.tableService.showCards(table, playerID);
+    }
+
 
     /**
      *
@@ -380,7 +393,6 @@ export class PokerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // tell every player the cards specifically
         for (const player of players) {
 
-            // const conn = this.connections.find(conn => conn.playerID === player.id);
             const socketId = await this.getSocketIdByPlayerId(player.id);
             // only tell currently connected players the update
             if (socketId && !player.disconnected) {
